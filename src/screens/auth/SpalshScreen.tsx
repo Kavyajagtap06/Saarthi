@@ -8,15 +8,41 @@ export default function SplashScreen() {
   const router = useRouter();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        router.replace('/(tabs)');
-      } else {
-        // @ts-ignore - Temporary ignore for hackathon
-        router.replace('/(auth)/login');  // ← Fixed this line
+    const unsubscribe = onAuthStateChanged(auth, 
+      (user) => {
+        console.log('Auth state changed, user:', user ? user.email : 'No user');
+        
+        // Use setTimeout to ensure navigation happens after component mount
+        setTimeout(() => {
+          if (user) {
+            console.log('Navigating to tabs');
+            router.replace('/(tabs)');
+          } else {
+            console.log('Navigating to login');
+            router.replace('/login');
+          }
+        }, 1000); // 1 second delay to show splash screen
+      },
+      (error) => {
+        console.error('Auth state error:', error);
+        // On error, go to login screen
+        setTimeout(() => {
+          router.replace('/login');
+        }, 1000);
       }
-    });
-    return unsubscribe;
+    );
+
+    // Fallback timeout in case auth state never resolves
+    const fallbackTimeout = setTimeout(() => {
+      console.log('Auth timeout, going to login');
+      unsubscribe();
+      router.replace('/login');
+    }, 5000); // 5 second timeout
+
+    return () => {
+      unsubscribe();
+      clearTimeout(fallbackTimeout);
+    };
   }, [router]);
 
   return (

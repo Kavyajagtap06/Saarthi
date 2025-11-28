@@ -1,3 +1,4 @@
+// src/config/firebase.ts
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
@@ -14,10 +15,8 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firebase Auth (without persistence for now)
+// Use simple getAuth for now - we'll fix persistence later
 export const auth = getAuth(app);
-
-// Initialize Cloud Firestore
 export const db = getFirestore(app);
 
 export default app;

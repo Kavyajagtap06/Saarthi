@@ -25,7 +25,6 @@ export default function SignupScreen() {
     email: '',
     password: '',
     confirmPassword: '',
-    phone: '',
   });
 
   const handleInputChange = (field: string, value: string) => {
@@ -67,11 +66,9 @@ export default function SignupScreen() {
 
   const onHandleSignup = async () => {
     if (!validateForm()) return;
-
     setLoading(true);
 
     try {
-      // Create user with email and password
       const userCredential = await createUserWithEmailAndPassword(
         auth, 
         formData.email, 
@@ -80,18 +77,16 @@ export default function SignupScreen() {
       
       const user = userCredential.user;
 
-      // Update user profile with display name
       await updateProfile(user, {
         displayName: formData.fullName
       });
 
-      // Create user document in Firestore
       await setDoc(doc(db, 'users', user.uid), {
         uid: user.uid,
         fullName: formData.fullName,
         email: formData.email,
-        phone: formData.phone || '',
         createdAt: new Date().toISOString(),
+        aadhaarVerified: false, // Added Aadhaar verification status
         preferences: {
           notifications: true,
           safeRouteEnabled: true,
@@ -99,10 +94,14 @@ export default function SignupScreen() {
         }
       });
 
+      // UPDATED: Redirect to Aadhaar verification instead of tabs
       Alert.alert(
         'Success', 
-        'Account created successfully!',
-        [{ text: 'OK', onPress: () => router.navigate('Login' as never) }]
+        'Account created successfully! Please verify your Aadhaar for enhanced security features.',
+        [{ 
+          text: 'Continue to Verification', 
+          onPress: () => router.replace('/verification') 
+        }]
       );
 
     } catch (error: any) {
@@ -110,7 +109,6 @@ export default function SignupScreen() {
       
       let errorMessage = 'Failed to create account. Please try again.';
       
-      // Handle specific Firebase auth errors
       switch (error.code) {
         case 'auth/email-already-in-use':
           errorMessage = 'This email is already registered. Please use a different email or login.';
@@ -148,6 +146,10 @@ export default function SignupScreen() {
           <Text style={styles.subtitle}>Join SafeRoute for safer journeys</Text>
         </View>
 
+        <View style={styles.securityBadge}>
+          <Text style={styles.securityBadgeText}>🔒 Secure & Encrypted</Text>
+        </View>
+
         <View style={styles.form}>
           <TextInput
             style={styles.input}
@@ -167,16 +169,6 @@ export default function SignupScreen() {
             autoCapitalize="none"
             value={formData.email}
             onChangeText={(text) => handleInputChange('email', text)}
-            editable={!loading}
-          />
-
-          <TextInput
-            style={styles.input}
-            placeholder="Phone Number (Optional)"
-            placeholderTextColor="#999"
-            keyboardType="phone-pad"
-            value={formData.phone}
-            onChangeText={(text) => handleInputChange('phone', text)}
             editable={!loading}
           />
 
@@ -215,12 +207,22 @@ export default function SignupScreen() {
           <View style={styles.footer}>
             <Text style={styles.footerText}>Already have an account? </Text>
             <TouchableOpacity 
-              onPress={() => router.navigate('Login' as never)}
+              onPress={() => router.push('/login')}
               disabled={loading}
             >
               <Text style={styles.footerLink}>Sign In</Text>
             </TouchableOpacity>
           </View>
+        </View>
+
+        <View style={styles.verificationInfo}>
+          <Text style={styles.verificationTitle}>Why Aadhaar Verification?</Text>
+          <Text style={styles.verificationText}>
+            • Enhanced security for your account{'\n'}
+            • Faster emergency response{'\n'}
+            • Access to premium safety features{'\n'}
+            • Verified user community
+          </Text>
         </View>
 
         <View style={styles.termsContainer}>
@@ -247,7 +249,7 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 30,
   },
   title: {
     fontSize: 28,
@@ -260,8 +262,23 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
   },
+  securityBadge: {
+    backgroundColor: '#f0f8ff',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#007bff',
+  },
+  securityBadgeText: {
+    color: '#007bff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
   form: {
     width: '100%',
+    marginBottom: 25,
   },
   input: {
     width: '100%',
@@ -306,6 +323,23 @@ const styles = StyleSheet.create({
     color: '#007bff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  verificationInfo: {
+    backgroundColor: '#f8f9fa',
+    padding: 20,
+    borderRadius: 12,
+    marginBottom: 20,
+  },
+  verificationTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 12,
+  },
+  verificationText: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
   },
   termsContainer: {
     alignItems: 'center',
