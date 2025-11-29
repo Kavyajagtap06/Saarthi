@@ -223,7 +223,7 @@ export default function HomeScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>SafeRoute</Text>
+        <Text style={styles.headerTitle}>Saarathi</Text>
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutText}>Logout</Text>
         </TouchableOpacity>
@@ -300,7 +300,7 @@ export default function HomeScreen() {
               disabled={!sourceLocation || !destinationLocation}
             >
               <Text style={styles.buttonText}>
-                AI Safe Route
+                Safe Routes
               </Text>
             </TouchableOpacity>
           </View>
@@ -383,7 +383,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255, 255, 255, 1)',
   },
   header: {
     flexDirection: 'row',
@@ -399,15 +399,15 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#007bff',
+    color: '#8b1757ff',
   },
   logoutButton: {
     padding: 8,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#a3abb3ff',
     borderRadius: 8,
   },
   logoutText: {
-    color: '#666',
+    color: '#8b1757ff',
     fontWeight: '500',
   },
   apiStatusBanner: {
@@ -417,7 +417,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: '#803838ff',
   },
   apiStatusText: {
     fontSize: 14,
@@ -437,7 +437,7 @@ const styles = StyleSheet.create({
     zIndex: 1000,
   },
   searchBox: {
-    backgroundColor: 'white',
+    backgroundColor: 'rgba(255, 238, 251, 1)',
     borderRadius: 12,
     padding: 16,
     shadowColor: '#000',

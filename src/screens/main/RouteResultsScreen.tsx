@@ -84,6 +84,7 @@ export default function RouteResultsScreen() {
           duration: `${Math.round(route.duration / 60)} mins`,
           safetyScore,
           description: TomTomService.getRouteDescription(safetyScore, index),
+          // keep same color mapping as before
           color: index === 0 ? '#4CAF50' : index === 1 ? '#FFC107' : '#FF9800',
           advantages: TomTomService.getRouteAdvantages(safetyScore, index),
           disadvantages: TomTomService.getRouteDisadvantages(safetyScore, index),
@@ -121,6 +122,23 @@ export default function RouteResultsScreen() {
     if (score >= 80) return 'Very Safe';
     if (score >= 60) return 'Moderately Safe';
     return 'Use Caution';
+  };
+
+  // Return a light tint background for the color (used for selected card bg)
+  const getTintForColor = (hex: string) => {
+    // Map known route hexs to soft tints (keeps visual consistent)
+    switch (hex.toUpperCase()) {
+      case '#4CAF50':
+        return 'rgba(76,175,80,0.12)'; // green tint
+      case '#FFC107':
+        return 'rgba(255,193,7,0.12)'; // amber tint
+      case '#FF9800':
+        return 'rgba(255,152,0,0.12)'; // orange tint
+      case '#F44336':
+        return 'rgba(244,67,54,0.12)'; // red tint fallback
+      default:
+        return 'rgba(85,7,78,0.06)'; // subtle purple fallback
+    }
   };
 
   if (loading) {
@@ -203,33 +221,46 @@ export default function RouteResultsScreen() {
             style={styles.routesScroll}
             contentContainerStyle={styles.routesScrollContent}
           >
-            {routes.map(route => (
-              <TouchableOpacity
-                key={route.id}
-                style={[
-                  styles.routeCard,
-                  selectedRoute === route.id && styles.selectedRouteCard,
-                  { borderLeftColor: route.color }
-                ]}
-                onPress={() => setSelectedRoute(route.id)}
-              >
-                <View style={styles.routeHeader}>
-                  <Text style={styles.routeDescription}>{route.description}</Text>
-                  <View style={[styles.safetyBadge, { backgroundColor: getSafetyColor(route.safetyScore) }]}>
-                    <Text style={styles.safetyScore}>{route.safetyScore}</Text>
+            {routes.map(route => {
+              const isSelected = selectedRoute === route.id;
+              return (
+                <TouchableOpacity
+                  key={route.id}
+                  activeOpacity={0.85}
+                  style={[
+                    styles.routeCard,
+                    isSelected && {
+                      backgroundColor: getTintForColor(route.color),
+                      borderWidth: 2,
+                      borderColor: route.color,
+                      shadowColor: route.color,
+                      elevation: 6,
+                    },
+                    // keep left color strip consistent
+                    { borderLeftColor: route.color }
+                  ]}
+                  onPress={() => setSelectedRoute(route.id)}
+                >
+                  <View style={styles.routeHeader}>
+                    <Text style={[styles.routeDescription, isSelected && { color: route.color }]}>
+                      {route.description}
+                    </Text>
+                    <View style={[styles.safetyBadge, { backgroundColor: getSafetyColor(route.safetyScore) }]}>
+                      <Text style={styles.safetyScore}>{route.safetyScore}</Text>
+                    </View>
                   </View>
-                </View>
-                
-                <View style={styles.routeDetails}>
-                  <Text style={styles.detailText}>📏 {route.distance}</Text>
-                  <Text style={styles.detailText}>⏱️ {route.duration}</Text>
-                </View>
-                
-                <Text style={styles.safetyLabel}>
-                  {getSafetyLabel(route.safetyScore)}
-                </Text>
-              </TouchableOpacity>
-            ))}
+                  
+                  <View style={styles.routeDetails}>
+                    <Text style={[styles.detailText, isSelected && { color: route.color }]}>📏 {route.distance}</Text>
+                    <Text style={[styles.detailText, isSelected && { color: route.color }]}>⏱️ {route.duration}</Text>
+                  </View>
+                  
+                  <Text style={[styles.safetyLabel, isSelected && { color: route.color }]}>
+                    {getSafetyLabel(route.safetyScore)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </ScrollView>
         </View>
 
@@ -287,7 +318,7 @@ export default function RouteResultsScreen() {
                     </View>
                   )}
 
-                  <TouchableOpacity style={styles.selectRouteButton}>
+                  <TouchableOpacity style={[styles.selectRouteButton, { backgroundColor: route.color }]}>
                     <Text style={styles.selectRouteText}>Select This Route</Text>
                   </TouchableOpacity>
                 </View>
@@ -303,19 +334,22 @@ export default function RouteResultsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255, 238, 251, 1)',
   },
+
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255, 238, 251, 1)',
   },
+
   loadingText: {
     marginTop: 16,
     fontSize: 16,
     color: '#666',
   },
+
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -323,96 +357,104 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 50,
     paddingBottom: 10,
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255, 238, 251, 1)',
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: '#e9ccec',
   },
+
   backButton: {
     padding: 8,
   },
+
   backButtonText: {
     fontSize: 16,
-    color: '#007bff',
+    color: '#8b1757ff',
     fontWeight: '600',
   },
+
   headerTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#55074eff',
   },
+
   placeholder: {
     width: 60,
   },
+
   mapContainer: {
-    height: '45%', // Fixed height for map
+    height: '45%',
+    backgroundColor: 'rgba(255, 238, 251, 1)',
   },
+
   map: {
     width: '100%',
     height: '100%',
   },
+
   bottomPanel: {
-    flex: 1, // Takes remaining space
-    backgroundColor: '#fff',
+    flex: 1,
+    backgroundColor: 'rgba(255, 238, 251, 1)',
   },
+
   routeSelectionSection: {
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#f3e9f9',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
-    minHeight: 160, // Fixed height for route cards
+    borderBottomColor: '#e9ccec',
+    minHeight: 160,
   },
+
   panelTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 8,
-    color: '#333',
+    color: '#55074eff',
   },
+
   routeSummary: {
     fontSize: 14,
-    color: '#666',
+    color: '#8b1757ff',
     marginBottom: 16,
   },
+
   routesScroll: {
-    flexGrow: 0, // Prevent vertical growth
+    flexGrow: 0,
   },
+
   routesScrollContent: {
-    paddingRight: 16, // Add some right padding for better scrolling
+    paddingRight: 16,
   },
+
   routeCard: {
-    backgroundColor: 'white',
+    backgroundColor: '#fff',
     padding: 16,
     borderRadius: 12,
     marginRight: 12,
     minWidth: 180,
     borderLeftWidth: 4,
+    // default subtle shadow
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowRadius: 2,
     elevation: 2,
   },
-  selectedRouteCard: {
-    backgroundColor: '#e3f2fd',
-    borderWidth: 2,
-    borderColor: '#007bff',
-    shadowColor: '#007bff',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-  },
+
   routeHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
   },
+
   routeDescription: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#55074eff',
     flex: 1,
   },
+
   safetyBadge: {
     width: 30,
     height: 30,
@@ -421,98 +463,116 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginLeft: 8,
   },
+
   safetyScore: {
     color: 'white',
     fontSize: 12,
     fontWeight: 'bold',
   },
+
   routeDetails: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 8,
   },
+
   detailText: {
     fontSize: 12,
-    color: '#666',
+    color: '#55074eff',
   },
+
   safetyLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#333',
+    color: '#55074eff',
   },
+
   detailsScroll: {
-    flex: 1, // Takes remaining space in bottom panel
+    flex: 1,
   },
+
   selectedRouteDetails: {
-    backgroundColor: 'white',
+    backgroundColor: 'rgba(255, 238, 251, 1)',
     padding: 16,
-    paddingBottom: 30, // Extra padding at bottom
+    paddingBottom: 30,
   },
+
   detailsTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 16,
-    color: '#333',
+    color: '#55074eff',
   },
+
   detailsGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 16,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#f3e9f9',
     padding: 12,
     borderRadius: 8,
   },
+
   detailItem: {
     alignItems: 'center',
     flex: 1,
   },
+
   detailLabel: {
     fontSize: 12,
-    color: '#666',
+    color: '#8b1757ff',
     marginBottom: 4,
   },
+
   detailValue: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#55074eff',
   },
+
   advantagesSection: {
     marginBottom: 16,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#f3e9f9',
     padding: 12,
     borderRadius: 8,
   },
+
   disadvantagesSection: {
     marginBottom: 16,
     backgroundColor: '#fff3cd',
     padding: 12,
     borderRadius: 8,
   },
+
   sectionTitle: {
     fontSize: 14,
     fontWeight: 'bold',
     marginBottom: 8,
-    color: '#333',
+    color: '#55074eff',
   },
+
   listItem: {
     fontSize: 12,
-    color: '#666',
+    color: '#8b1757ff',
     marginBottom: 4,
     marginLeft: 8,
     lineHeight: 16,
   },
+
   warningsSection: {
     marginBottom: 16,
     backgroundColor: '#f8d7da',
     padding: 12,
     borderRadius: 8,
   },
+
   warningTitle: {
     fontSize: 14,
     fontWeight: 'bold',
     marginBottom: 8,
     color: '#721c24',
   },
+
   warningText: {
     fontSize: 12,
     color: '#721c24',
@@ -520,13 +580,15 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     lineHeight: 16,
   },
+
   selectRouteButton: {
-    backgroundColor: '#007bff',
+    backgroundColor: '#8b1757ff',
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',
     marginTop: 8,
   },
+
   selectRouteText: {
     color: '#fff',
     fontSize: 16,
