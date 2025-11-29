@@ -7,11 +7,14 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Alert
+  Alert,
+  Animated,
+  PanResponder
 } from 'react-native';
 import MapView, { Polyline, Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { TomTomService, Location, RouteSafetyScore } from '../../services/tomtomService';
+import { Ionicons } from '@expo/vector-icons';
 
 const { width, height } = Dimensions.get('window');
 
@@ -20,7 +23,7 @@ interface Route {
   coordinates: Location[];
   distance: string;
   duration: string;
-  safety: RouteSafetyScore; // Changed from safetyScore to safety object
+  safety: RouteSafetyScore;
   description: string;
   color: string;
 }
@@ -36,23 +39,100 @@ export default function RouteResultsScreen() {
   const [sourceLocation, setSourceLocation] = useState<Location | null>(null);
   const [destinationLocation, setDestinationLocation] = useState<Location | null>(null);
 
-  // Add this navigation handler function
-const handleSelectRoute = (route: Route) => {
-  console.log('🚀 Starting navigation for route:', route.description);
-  
-  // Navigate to navigation screen with route data
-  router.push({
-    pathname: '/navigation',
-    params: {
-      route: JSON.stringify(route),
-      startLocation: JSON.stringify(sourceLocation),
-      endLocation: JSON.stringify(destinationLocation),
-      routeName: route.description,
-      totalDistance: route.distance,
-      totalDuration: route.duration,
-    }
-  });
-};
+  // Bottom sheet animation
+  const bottomSheetHeight = useRef(new Animated.Value(280)).current; // Initial height
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  // PanResponder for drag gestures
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderMove: (_, gestureState) => {
+        // Limit movement between min and max heights
+        const newHeight = Math.max(200, Math.min(height * 0.8, 280 - gestureState.dy));
+        bottomSheetHeight.setValue(newHeight);
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        const currentHeight = 280 - gestureState.dy;
+        
+        if (gestureState.dy < -50) {
+          // Swiped up - expand to 80% of screen
+          expandBottomSheet();
+        } else if (gestureState.dy > 50) {
+          // Swiped down - collapse to initial height
+          collapseBottomSheet();
+        } else {
+          // Return to nearest state
+          if (currentHeight > height * 0.6) {
+            expandBottomSheet();
+          } else {
+            collapseBottomSheet();
+          }
+        }
+      },
+    })
+  ).current;
+
+  const expandBottomSheet = () => {
+    Animated.spring(bottomSheetHeight, {
+      toValue: height * 0.8,
+      useNativeDriver: false,
+      tension: 50,
+      friction: 10,
+    }).start();
+    setIsExpanded(true);
+  };
+
+  const collapseBottomSheet = () => {
+    Animated.spring(bottomSheetHeight, {
+      toValue: 280,
+      useNativeDriver: false,
+      tension: 50,
+      friction: 10,
+    }).start();
+    setIsExpanded(false);
+  };
+
+  const toggleBottomSheet = () => {
+    isExpanded ? collapseBottomSheet() : expandBottomSheet();
+  };
+
+  // Navigation handlers
+  const handleSelectRoute = (route: Route) => {
+    console.log('🚀 Starting navigation for route:', route.description);
+    
+    router.push({
+      pathname: '/navigation',
+      params: {
+        route: JSON.stringify(route),
+        startLocation: JSON.stringify(sourceLocation),
+        endLocation: JSON.stringify(destinationLocation),
+        routeName: route.description,
+        totalDistance: route.distance,
+        totalDuration: route.duration,
+      }
+    });
+  };
+
+  const handleFindCompanions = (route: Route) => {
+    console.log('👥 Finding companions for route:', route.description);
+    
+    router.push({
+      pathname: '/companion',
+      params: {
+        startLat: sourceLocation?.latitude.toString(),
+        startLng: sourceLocation?.longitude.toString(),
+        startAddress: sourceLocation?.address,
+        endLat: destinationLocation?.latitude.toString(),
+        endLng: destinationLocation?.longitude.toString(),
+        endAddress: destinationLocation?.address,
+        estimatedDuration: route.duration.replace(' mins', ''),
+        routeDescription: route.description,
+        routeSafetyScore: route.safety.overallScore.toString(),
+      }
+    });
+  };
 
   const source = params.source as string;
   const destination = params.destination as string;
@@ -69,7 +149,6 @@ const handleSelectRoute = (route: Route) => {
     try {
       setLoading(true);
 
-      // Create location objects from coordinates
       const startLocation: Location = {
         latitude: sourceLat,
         longitude: sourceLng,
@@ -85,20 +164,19 @@ const handleSelectRoute = (route: Route) => {
       setSourceLocation(startLocation);
       setDestinationLocation(endLocation);
 
-      // Get real routes with safety data from TomTom
       const routesWithSafety = await TomTomService.calculateRoutes(startLocation, endLocation);
       
-      // Convert to our route format
+      // Updated route names
+      const routeTypeNames = ['Route 1', 'Route 2', 'Route 3'];
+      
       const formattedRoutes: Route[] = routesWithSafety.map(({route, safety}, index) => {
-        const routeTypeNames = ['Safest', 'Balanced', 'Fastest'];
-        
         return {
           id: `route-${index}`,
           coordinates: route.coordinates,
           distance: `${(route.distance / 1000).toFixed(1)} km`,
           duration: `${Math.round(route.duration / 60)} mins`,
-          safety, // Real safety data from TomTom APIs
-          description: `${routeTypeNames[index]} Route`,
+          safety,
+          description: routeTypeNames[index],
           color: index === 0 ? '#4CAF50' : index === 1 ? '#FFC107' : '#FF9800',
         };
       });
@@ -106,7 +184,6 @@ const handleSelectRoute = (route: Route) => {
       setRoutes(formattedRoutes);
       setSelectedRoute(formattedRoutes[0]?.id || '');
 
-      // Fit map to show all routes
       if (mapRef.current && formattedRoutes.length > 0) {
         const allCoordinates = formattedRoutes.flatMap(route => route.coordinates);
         mapRef.current.fitToCoordinates(allCoordinates, {
@@ -129,29 +206,6 @@ const handleSelectRoute = (route: Route) => {
     return '#F44336';
   };
 
-  const getSafetyLabel = (score: number) => {
-    if (score >= 80) return 'Very Safe';
-    if (score >= 60) return 'Moderately Safe';
-    return 'Use Caution';
-  };
-
-  // Return a light tint background for the color (used for selected card bg)
-  const getTintForColor = (hex: string) => {
-    // Map known route hexs to soft tints (keeps visual consistent)
-    switch (hex.toUpperCase()) {
-      case '#4CAF50':
-        return 'rgba(76,175,80,0.12)'; // green tint
-      case '#FFC107':
-        return 'rgba(255,193,7,0.12)'; // amber tint
-      case '#FF9800':
-        return 'rgba(255,152,0,0.12)'; // orange tint
-      case '#F44336':
-        return 'rgba(244,67,54,0.12)'; // red tint fallback
-      default:
-        return 'rgba(85,7,78,0.06)'; // subtle purple fallback
-    }
-  };
-
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -172,7 +226,7 @@ const handleSelectRoute = (route: Route) => {
         <View style={styles.placeholder} />
       </View>
 
-      {/* Map - Fixed height */}
+      {/* Map - Takes full screen */}
       <View style={styles.mapContainer}>
         <MapView
           ref={mapRef}
@@ -217,61 +271,105 @@ const handleSelectRoute = (route: Route) => {
         </MapView>
       </View>
 
-      {/* Bottom Panel - Fixed height with internal scrolling */}
-      <View style={styles.bottomPanel}>
-        {/* Route Selection Cards - Fixed height section */}
-        <View style={styles.routeSelectionSection}>
-          <Text style={styles.panelTitle}>Available Routes</Text>
-          <Text style={styles.routeSummary}>
-            From: {source} → To: {destination}
-          </Text>
-          
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            style={styles.routesScroll}
-            contentContainerStyle={styles.routesScrollContent}
+      {/* Draggable Bottom Sheet */}
+      <Animated.View 
+        style={[
+          styles.bottomSheet,
+          {
+            height: bottomSheetHeight,
+          }
+        ]}
+      >
+        {/* Drag Handle */}
+        <View 
+          style={styles.dragHandle}
+          {...panResponder.panHandlers}
+        >
+          <View style={styles.dragHandleBar} />
+          <TouchableOpacity 
+            style={styles.expandButton}
+            onPress={toggleBottomSheet}
           >
-            {routes.map(route => (
-              <TouchableOpacity
-                key={route.id}
-                style={[
-                  styles.routeCard,
-                  selectedRoute === route.id && styles.selectedRouteCard,
-                  { borderLeftColor: route.color }
-                ]}
-                onPress={() => setSelectedRoute(route.id)}
-              >
-                <View style={styles.routeHeader}>
-                  <Text style={styles.routeDescription}>{route.description}</Text>
-                  <View style={[styles.safetyBadge, { backgroundColor: getSafetyColor(route.safety.overallScore) }]}>
-                    <Text style={styles.safetyScore}>{route.safety.overallScore}</Text>
-                  </View>
-                </View>
-                
-                <View style={styles.routeDetails}>
-                  <Text style={styles.detailText}>📏 {route.distance}</Text>
-                  <Text style={styles.detailText}>⏱️ {route.duration}</Text>
-                </View>
-                
-                <Text style={styles.safetyLabel}>
-                  {TomTomService.getRouteDescription(route.safety.overallScore)}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+            <Ionicons 
+              name={isExpanded ? "chevron-down" : "chevron-up"} 
+              size={20} 
+              color="#8b1757ff" 
+            />
+          </TouchableOpacity>
         </View>
 
-        {/* Route Details - Scrollable section */}
+        {/* Scrollable Content */}
         <ScrollView 
-          style={styles.detailsScroll}
+          style={styles.bottomSheetContent}
           showsVerticalScrollIndicator={true}
-          nestedScrollEnabled={true}
         >
+          {/* Route Selection Section */}
+          <View style={styles.routeSelectionSection}>
+            <Text style={styles.panelTitle}>Available Routes</Text>
+            <Text style={styles.routeSummary}>
+              From: {source} → To: {destination}
+            </Text>
+            
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              style={styles.routesScroll}
+              contentContainerStyle={styles.routesScrollContent}
+            >
+              {routes.map(route => (
+                <TouchableOpacity
+                  key={route.id}
+                  style={[
+                    styles.routeCard,
+                    selectedRoute === route.id && styles.selectedRouteCard,
+                    { borderLeftColor: route.color }
+                  ]}
+                  onPress={() => setSelectedRoute(route.id)}
+                >
+                  <View style={styles.routeHeader}>
+                    <Text style={styles.routeDescription}>{route.description}</Text>
+                    <View style={[styles.safetyBadge, { backgroundColor: getSafetyColor(route.safety.overallScore) }]}>
+                      <Text style={styles.safetyScore}>{route.safety.overallScore}</Text>
+                    </View>
+                  </View>
+                  
+                  <View style={styles.routeDetails}>
+                    <Text style={styles.detailText}>📏 {route.distance}</Text>
+                    <Text style={styles.detailText}>⏱️ {route.duration}</Text>
+                  </View>
+                  
+                  <Text style={styles.safetyLabel}>
+                    {TomTomService.getRouteDescription(route.safety.overallScore)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          {/* Selected Route Details */}
           {selectedRoute && (
             <View style={styles.selectedRouteDetails}>
               {routes.filter(route => route.id === selectedRoute).map(route => (
                 <View key={route.id}>
+                  {/* Action Buttons */}
+                  <View style={styles.actionButtons}>
+                    <TouchableOpacity 
+                      style={styles.navigationButton}
+                      onPress={() => handleSelectRoute(route)}
+                    >
+                      <Ionicons name="navigate" size={20} color="#fff" />
+                      <Text style={styles.navigationButtonText}>Start Navigation</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity 
+                      style={styles.companionButton}
+                      onPress={() => handleFindCompanions(route)}
+                    >
+                      <Ionicons name="people" size={20} color="#fff" />
+                      <Text style={styles.companionButtonText}>Find Companion</Text>
+                    </TouchableOpacity>
+                  </View>
+
                   <Text style={styles.detailsTitle}>Safety Analysis</Text>
                   
                   {/* Overall Safety Score */}
@@ -367,19 +465,12 @@ const handleSelectRoute = (route: Route) => {
                       ))}
                     </View>
                   )}
-
-                  <TouchableOpacity 
-  style={styles.selectRouteButton}
-  onPress={() => handleSelectRoute(route)}
->
-  <Text style={styles.selectRouteText}>Start Navigation</Text>
-</TouchableOpacity>
                 </View>
               ))}
             </View>
           )}
         </ScrollView>
-      </View>
+      </Animated.View>
     </View>
   );
 }
@@ -429,28 +520,58 @@ const styles = StyleSheet.create({
     width: 60,
   },
   mapContainer: {
-    height: '45%',
+    flex: 1,
   },
   map: {
     width: '100%',
     height: '100%',
   },
-  bottomPanel: {
-    flex: 1,
+  bottomSheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 10,
+    overflow: 'hidden',
   },
-  routeSelectionSection: {
-    backgroundColor: '#f3e9f9',
-    padding: 16,
+  dragHandle: {
+    alignItems: 'center',
+    paddingVertical: 8,
+    backgroundColor: '#f8f9fa',
     borderBottomWidth: 1,
     borderBottomColor: '#e9ecef',
-    minHeight: 160,
+  },
+  dragHandleBar: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#ccc',
+    borderRadius: 2,
+    marginBottom: 4,
+  },
+  expandButton: {
+    padding: 4,
+  },
+  bottomSheetContent: {
+    flex: 1,
+  },
+  routeSelectionSection: {
+    padding: 16,
+    backgroundColor: '#f3e9f9',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e9ecef',
   },
   panelTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: 8,
     color: '#55074eff',
+    marginBottom: 8,
   },
   routeSummary: {
     fontSize: 14,
@@ -523,13 +644,44 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#55074eff',
   },
-  detailsScroll: {
-    flex: 1,
-  },
   selectedRouteDetails: {
-    backgroundColor: 'rgba(255, 238, 251, 1)',
     padding: 16,
     paddingBottom: 30,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 20,
+  },
+  navigationButton: {
+    flex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#8b1757ff',
+    padding: 16,
+    borderRadius: 8,
+    gap: 8,
+  },
+  navigationButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  companionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#4CAF50',
+    padding: 16,
+    borderRadius: 8,
+    gap: 8,
+  },
+  companionButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   detailsTitle: {
     fontSize: 18,
@@ -662,17 +814,5 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     marginLeft: 8,
     lineHeight: 18,
-  },
-  selectRouteButton: {
-    backgroundColor: '#8b1757ff',
-    padding: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  selectRouteText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
   },
 });

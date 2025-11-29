@@ -34,9 +34,9 @@ export default function SOSScreen() {
     { name: 'Fire Brigade', number: '101' },
     { name: 'Women Helpline', number: '1091' },
     { name: 'Emergency Disaster Management', number: '108' },
-    { name: 'Mom', number: '+91-9876543210' },
-    { name: 'Dad', number: '+91-9876543211' },
-    { name: 'Emergency Contact', number: '+91-9876543212' },
+    { name: 'Mom', number: '+91-9011830092' },
+    { name: 'Dad', number: '+91-9552199949' },
+    { name: 'Emergency Contact', number: '+91-9022809121' },
   ]);
 
   useEffect(() => {
