@@ -5,51 +5,50 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Image
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { doc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../../config/firebase';
+import CustomPopup from '../../../components/CustomPopup';
 
 export default function AadhaarVerificationScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [step, setStep] = useState(1); // 1: Aadhaar input, 2: OTP verification
+  const [step, setStep] = useState(1);
   const [aadhaarNumber, setAadhaarNumber] = useState('');
   const [otp, setOtp] = useState('');
-  const [isVerified, setIsVerified] = useState(false);
 
-  // Validate Aadhaar number (12 digits)
-  const validateAadhaar = (number: string): boolean => {
-    const aadhaarRegex = /^\d{12}$/;
-    return aadhaarRegex.test(number);
+  const [popupVisible, setPopupVisible] = useState(false);
+  const [popupTitle, setPopupTitle] = useState('');
+  const [popupMessage, setPopupMessage] = useState('');
+  const [popupContinue, setPopupContinue] = useState<(() => void) | undefined>(undefined);
+
+  const showPopup = (title: string, message: string, onContinue?: () => void) => {
+    setPopupTitle(title);
+    setPopupMessage(message);
+    setPopupContinue(() => onContinue);
+    setPopupVisible(true);
   };
 
-  // Simulate OTP generation
-  const generateOTP = (): string => {
-    return Math.floor(100000 + Math.random() * 900000).toString();
-  };
+  const validateAadhaar = (number: string) => /^\d{12}$/.test(number);
+  const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
 
   const handleAadhaarSubmit = () => {
     if (!validateAadhaar(aadhaarNumber)) {
-      Alert.alert('Invalid Aadhaar', 'Please enter a valid 12-digit Aadhaar number');
+      showPopup('Invalid Aadhaar', 'Please enter a valid 12-digit Aadhaar number');
       return;
     }
-
     setLoading(true);
-    
-    // Simulate API call to send OTP
     setTimeout(() => {
       const generatedOTP = generateOTP();
-      Alert.alert(
-        'OTP Sent', 
-        `Demo OTP: ${generatedOTP}\n\nIn production, this would be sent via SMS to your registered mobile number.`,
-        [{ text: 'OK', onPress: () => setStep(2) }]
+      showPopup(
+        'OTP Sent',
+        `Demo OTP: ${generatedOTP}\n\n(In production, SMS will be sent to your Aadhaar-linked number)`,
+        () => setStep(2) // move to OTP step
       );
       setLoading(false);
     }, 2000);
@@ -57,33 +56,25 @@ export default function AadhaarVerificationScreen() {
 
   const handleOTPVerify = async () => {
     if (otp.length !== 6) {
-      Alert.alert('Invalid OTP', 'Please enter the 6-digit OTP');
+      showPopup('Invalid OTP', 'Please enter the 6-digit OTP');
       return;
     }
-
     setLoading(true);
-
-    // Simulate OTP verification
     setTimeout(async () => {
       try {
         const user = auth.currentUser;
         if (user) {
-          // Update user document with Aadhaar verification status
           await updateDoc(doc(db, 'users', user.uid), {
             aadhaarVerified: true,
-            aadhaarNumber: aadhaarNumber.replace(/(\d{4})(\d{4})(\d{4})/, '$1-XXXX-XXXX'), // Mask for security
-            verificationDate: new Date().toISOString()
+            aadhaarNumber: aadhaarNumber.replace(/(\d{4})(\d{4})(\d{4})/, '$1-XXXX-XXXX'),
+            verificationDate: new Date().toISOString(),
           });
         }
-
-        setIsVerified(true);
-        Alert.alert(
-          'Verification Successful', 
-          'Your Aadhaar has been verified successfully!',
-          [{ text: 'Continue', onPress: () => router.replace('/(tabs)') }]
+        showPopup('Verification Successful', 'Your Aadhaar has been verified!', () =>
+          router.replace('/(tabs)')
         );
       } catch (error) {
-        Alert.alert('Verification Failed', 'Please try again later');
+        showPopup('Verification Failed', 'Please try again later', () => setStep(1));
       } finally {
         setLoading(false);
       }
@@ -91,255 +82,156 @@ export default function AadhaarVerificationScreen() {
   };
 
   const handleSkip = () => {
-    Alert.alert(
-      'Skip Verification',
-      'You can verify your Aadhaar later for enhanced security features.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Skip', onPress: () => router.replace('/(tabs)') }
-      ]
+    showPopup('Skip Verification', 'You can verify Aadhaar later for enhanced security.', () =>
+      router.replace('/(tabs)')
     );
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView 
-        contentContainerStyle={styles.scrollContainer}
-        showsVerticalScrollIndicator={false}
-      >
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
+        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>Aadhaar Verification</Text>
           <Text style={styles.subtitle}>
-            {step === 1 
-              ? 'Verify your identity for enhanced security' 
-              : 'Enter OTP sent to your registered mobile number'}
+            {step === 1
+              ? 'Verify your identity for safer Saarathi experience'
+              : 'Enter the OTP sent to your registered number'}
           </Text>
         </View>
 
+        {/* Icon */}
         <View style={styles.iconContainer}>
           <View style={styles.iconWrapper}>
             <Text style={styles.icon}>🔒</Text>
           </View>
         </View>
 
+        {/* Form */}
         {step === 1 ? (
           <View style={styles.form}>
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Aadhaar Number</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter 12-digit Aadhaar number"
-                placeholderTextColor="#999"
-                keyboardType="number-pad"
-                maxLength={12}
-                value={aadhaarNumber}
-                onChangeText={(text) => setAadhaarNumber(text.replace(/[^0-9]/g, ''))}
-                editable={!loading}
-              />
-              <Text style={styles.hint}>
-                Format: XXXX XXXX XXXX (12 digits without spaces)
-              </Text>
-            </View>
+            <Text style={styles.label}>Aadhaar Number</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter 12-digit Aadhaar number"
+              placeholderTextColor="#999"
+              keyboardType="number-pad"
+              maxLength={12}
+              value={aadhaarNumber}
+              onChangeText={text => setAadhaarNumber(text.replace(/[^0-9]/g, ''))}
+            />
+            <Text style={styles.hint}>Format: XXXX XXXX XXXX (12 digits without spaces)</Text>
 
-            <TouchableOpacity 
-              style={[styles.button, loading && styles.buttonDisabled]} 
+            <TouchableOpacity
+              style={[styles.button, loading && styles.buttonDisabled]}
               onPress={handleAadhaarSubmit}
               disabled={loading}
             >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.buttonText}>Send OTP</Text>
-              )}
+              {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Send OTP</Text>}
             </TouchableOpacity>
           </View>
         ) : (
           <View style={styles.form}>
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Enter OTP</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter 6-digit OTP"
-                placeholderTextColor="#999"
-                keyboardType="number-pad"
-                maxLength={6}
-                value={otp}
-                onChangeText={(text) => setOtp(text.replace(/[^0-9]/g, ''))}
-                editable={!loading}
-              />
-              <Text style={styles.hint}>
-                OTP sent to mobile number linked with Aadhaar
-              </Text>
-            </View>
+            <Text style={styles.label}>Enter OTP</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter 6-digit OTP"
+              placeholderTextColor="#999"
+              keyboardType="number-pad"
+              maxLength={6}
+              value={otp}
+              onChangeText={text => setOtp(text.replace(/[^0-9]/g, ''))}
+            />
 
-            <TouchableOpacity 
-              style={[styles.button, loading && styles.buttonDisabled]} 
+            <TouchableOpacity
+              style={[styles.button, loading && styles.buttonDisabled]}
               onPress={handleOTPVerify}
               disabled={loading}
             >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.buttonText}>Verify OTP</Text>
-              )}
+              {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Verify OTP</Text>}
             </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={styles.resendButton}
-              onPress={handleAadhaarSubmit}
-              disabled={loading}
-            >
+            <TouchableOpacity style={styles.resendButton} onPress={handleAadhaarSubmit}>
               <Text style={styles.resendText}>Resend OTP</Text>
             </TouchableOpacity>
           </View>
         )}
 
+        {/* Security Info */}
         <View style={styles.securityInfo}>
-          <Text style={styles.securityTitle}>🔒 Your Data is Secure</Text>
+          <Text style={styles.securityTitle}>🔐 Your Data is Secure</Text>
           <Text style={styles.securityText}>
-            • We use bank-level encryption{'\n'}
-            • Your Aadhaar data is not stored{'\n'}
-            • Verified through secure government channels{'\n'}
-            • Used only for identity verification
+            • Aadhaar number masked & encrypted{'\n'}
+            • No storage of sensitive data{'\n'}
+            • Government API-based validation (live systems){'\n'}
+            • Protected with industry-grade encryption
           </Text>
         </View>
 
-        <TouchableOpacity 
-          style={styles.skipButton}
-          onPress={handleSkip}
-          disabled={loading}
-        >
+        {/* Skip */}
+        <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
           <Text style={styles.skipText}>Skip for now</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Custom Popup */}
+      <CustomPopup
+        visible={popupVisible}
+        title={popupTitle}
+        message={popupMessage}
+        onClose={() => {
+          setPopupVisible(false);
+          setStep(1); // optional reset
+        }}
+        onContinue={() => {
+          setPopupVisible(false);
+          popupContinue?.();
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }
 
+// Styles (same as your theme)
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  scrollContainer: {
-    flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingVertical: 40,
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: 30,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  iconContainer: {
-    alignItems: 'center',
-    marginBottom: 40,
-  },
+  container: { flex: 1, backgroundColor: 'rgba(255, 238, 251, 1)' },
+  scrollContainer: { flexGrow: 1, paddingHorizontal: 24, paddingVertical: 40 },
+  header: { alignItems: 'center', marginBottom: 30 },
+  title: { fontSize: 28, fontWeight: '800', color: '#55074eff' },
+  subtitle: { fontSize: 16, color: '#55074eff', textAlign: 'center', marginTop: 4 },
+  iconContainer: { alignItems: 'center', marginBottom: 35 },
   iconWrapper: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#f0f8ff',
+    backgroundColor: '#f7d2ebff',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#8b1757ff',
   },
-  icon: {
-    fontSize: 32,
-  },
-  form: {
-    width: '100%',
-    marginBottom: 30,
-  },
-  inputContainer: {
-    marginBottom: 25,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
-  },
+  icon: { fontSize: 32, color: '#8b1757ff' },
+  form: { marginBottom: 25 },
+  label: { fontSize: 16, fontWeight: '600', color: '#55074eff', marginBottom: 8 },
   input: {
-    width: '100%',
     height: 56,
-    borderWidth: 1,
-    borderColor: '#ddd',
+    backgroundColor: '#f7d2ebff',
     borderRadius: 12,
     paddingHorizontal: 16,
     fontSize: 16,
-    backgroundColor: '#fafafa',
-    color: '#333',
+    color: '#4a2c5a',
+    borderWidth: 1.2,
+    borderColor: '#8b1757ff',
   },
-  hint: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 8,
-    fontStyle: 'italic',
-  },
-  button: {
-    width: '100%',
-    height: 56,
-    backgroundColor: '#007bff',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 12,
-    marginBottom: 16,
-  },
-  buttonDisabled: {
-    backgroundColor: '#ccc',
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  resendButton: {
-    alignItems: 'center',
-    padding: 12,
-  },
-  resendText: {
-    color: '#007bff',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  securityInfo: {
-    backgroundColor: '#f8f9fa',
-    padding: 20,
-    borderRadius: 12,
-    marginBottom: 30,
-  },
-  securityTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 12,
-  },
-  securityText: {
-    fontSize: 14,
-    color: '#666',
-    lineHeight: 20,
-  },
-  skipButton: {
-    alignItems: 'center',
-    padding: 12,
-  },
-  skipText: {
-    color: '#666',
-    fontSize: 16,
-  },
+  hint: { color: '#55074eff', marginTop: 8, fontStyle: 'italic' },
+  button: { height: 56, backgroundColor: '#8b1757ff', justifyContent: 'center', alignItems: 'center', borderRadius: 12, marginTop: 20 },
+  buttonDisabled: { opacity: 0.7 },
+  buttonText: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  resendButton: { alignItems: 'center', marginTop: 14 },
+  resendText: { color: '#df1fcfff', fontWeight: '600', fontSize: 15 },
+  securityInfo: { backgroundColor: '#f7d2ebff', padding: 18, borderRadius: 12, marginTop: 25, borderWidth: 1.2, borderColor: '#8b1757ff' },
+  securityTitle: { fontSize: 16, fontWeight: '700', color: '#5c154aff', marginBottom: 10 },
+  securityText: { fontSize: 14, color: '#5c154aff', lineHeight: 20 },
+  skipButton: { marginTop: 20, alignItems: 'center' },
+  skipText: { color: '#df1fcfff', fontSize: 16, fontWeight: '600' },
 });

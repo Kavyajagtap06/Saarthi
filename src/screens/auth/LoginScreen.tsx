@@ -6,14 +6,15 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  Image
 } from 'react-native';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../../config/firebase';
-import { useRouter } from 'expo-router'; // ← Change this import
+import { useRouter } from 'expo-router';
 
 export default function LoginScreen() {
-  const router = useRouter(); // ← Use useRouter instead of useNavigation
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -23,15 +24,12 @@ export default function LoginScreen() {
       setLoading(true);
       signInWithEmailAndPassword(auth, email, password)
         .then(() => {
-          console.log('Login success');
-          router.replace('/(tabs)'); // ← Use router.replace for successful login
+          router.replace('/(tabs)');
         })
         .catch((err) => {
           Alert.alert('Login error', err.message);
         })
-        .finally(() => {
-          setLoading(false);
-        });
+        .finally(() => setLoading(false));
     } else {
       Alert.alert('Error', 'Please fill in all fields');
     }
@@ -39,46 +37,60 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Welcome Back</Text>
+
+      {/* LOGO */}
+      <Image
+        source={require('../../../assets/images/finallogo.png')}
+        style={styles.logo}
+      />
+
+      {/* TITLE */}
+      <Text style={styles.title}>Saarathi</Text>
+      <Text style={styles.subtitle}>Walk Safe,Walk Smart!</Text>
+
+      {/* EMAIL INPUT */}
       <TextInput
         style={styles.input}
-        placeholder='Enter email'
-        autoCapitalize='none'
-        keyboardType='email-address'
+        placeholder="Email"
+        placeholderTextColor="#666"
         value={email}
-        onChangeText={(text) => setEmail(text)}
+        onChangeText={setEmail}
+        autoCapitalize="none"
         editable={!loading}
       />
+
+      {/* PASSWORD INPUT */}
       <TextInput
         style={styles.input}
-        placeholder='Enter password'
-        autoCapitalize='none'
-        autoCorrect={false}
-        secureTextEntry={true}
+        placeholder="Password"
+        placeholderTextColor="#666"
+        secureTextEntry
         value={password}
-        onChangeText={(text) => setPassword(text)}
+        onChangeText={setPassword}
         editable={!loading}
       />
-      <TouchableOpacity 
-        style={[styles.button, loading && styles.buttonDisabled]} 
+
+      {/* LOGIN BUTTON */}
+      <TouchableOpacity
+        style={[styles.button, loading && styles.buttonDisabled]}
         onPress={onHandleLogin}
         disabled={loading}
       >
         {loading ? (
           <ActivityIndicator color="#fff" />
         ) : (
-          <Text style={styles.buttonText}>Log In</Text>
+          <Text style={styles.buttonText}>Login →</Text>
         )}
       </TouchableOpacity>
+
+      {/* FOOTER */}
       <View style={styles.footer}>
-        <Text>Don't have an account? </Text>
-        <TouchableOpacity 
-          onPress={() => router.push('/signup')} // ← Use router.push for navigation
-          disabled={loading}
-        >
+        <Text style={styles.footerText}>Don’t have an account?</Text>
+        <TouchableOpacity onPress={() => router.push('/signup')}>
           <Text style={styles.footerLink}>Sign Up</Text>
         </TouchableOpacity>
       </View>
+
     </View>
   );
 }
@@ -86,47 +98,83 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: 'rgba(77, 4, 61, 1)',  
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 30,
+    paddingHorizontal: 25,
   },
+
+  logo: {
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    marginBottom: 10,
+  },
+
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 30,
-  },
-  input: {
-    width: '100%',
-    height: 50,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    marginBottom: 15,
-  },
-  button: {
-    width: '100%',
-    height: 50,
-    backgroundColor: '#007bff',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 8,
+    fontSize: 36,
+    fontWeight: '800',
+    color: '#f7f8f8ff',
     marginTop: 10,
   },
-  buttonDisabled: {
-    backgroundColor: '#ccc',
+
+  subtitle: {
+    fontSize: 16,
+    color: '#f0f0f0ff',
+    marginBottom: 35,
   },
+
+  input: {
+    width: '100%',
+    height: 55,
+    backgroundColor: '#f7d2ebff',
+    borderRadius: 14,
+    paddingHorizontal: 15,
+    marginBottom: 18,
+    fontSize: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 5,
+  },
+
+  button: {
+    width: '100%',
+    height: 55,
+    backgroundColor: '#8b1757ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 25,
+    marginTop: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 7,
+    elevation: 8,
+  },
+
+  buttonDisabled: {
+    opacity: 0.7,
+  },
+
   buttonText: {
     color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 20,
+    fontWeight: '700',
   },
+
   footer: {
-    marginTop: 20,
     flexDirection: 'row',
+    marginTop: 25,
   },
+
+  footerText: {
+    color: '#ecf3f3ff',
+    fontSize: 15,
+  },
+
   footerLink: {
-    color: '#007bff',
-    fontWeight: 'bold',
+    color: '#df1fcfff',
+    fontWeight: '700',
+    fontSize: 15,
   },
 });

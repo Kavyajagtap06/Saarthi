@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Image } from 'react-native';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../../config/firebase';
 import { useRouter } from 'expo-router';
@@ -8,48 +8,31 @@ export default function SplashScreen() {
   const router = useRouter();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, 
-      (user) => {
-        console.log('Auth state changed, user:', user ? user.email : 'No user');
-        
-        // Use setTimeout to ensure navigation happens after component mount
-        setTimeout(() => {
-          if (user) {
-            console.log('Navigating to tabs');
-            router.replace('/(tabs)');
-          } else {
-            console.log('Navigating to login');
-            router.replace('/login');
-          }
-        }, 1000); // 1 second delay to show splash screen
-      },
-      (error) => {
-        console.error('Auth state error:', error);
-        // On error, go to login screen
-        setTimeout(() => {
-          router.replace('/login');
-        }, 1000);
-      }
-    );
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setTimeout(() => {
+        router.replace(user ? '/(tabs)' : '/login');
+      }, 1200); 
+    });
 
-    // Fallback timeout in case auth state never resolves
-    const fallbackTimeout = setTimeout(() => {
-      console.log('Auth timeout, going to login');
-      unsubscribe();
-      router.replace('/login');
-    }, 5000); // 5 second timeout
-
-    return () => {
-      unsubscribe();
-      clearTimeout(fallbackTimeout);
-    };
-  }, [router]);
+    return unsubscribe;
+  }, []);
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>SafeRoute</Text>
-      <Text style={styles.subtitle}>Your Safety, Our Priority</Text>
-      <ActivityIndicator size="large" color="#0000ff" style={styles.loader} />
+
+      {/* LOGO */}
+      <Image
+        source={require('../../../assets/images/finallogo.png')}
+        style={styles.logo}
+      />
+
+      {/* TITLE */}
+      <Text style={styles.title}>Saarathi</Text>
+      <Text style={styles.subtitle}>Walk Safe, Walk Smart!</Text>
+
+      {/* LOADER */}
+      <ActivityIndicator size="large" color="#f7d2ebff" style={styles.loader} />
+
     </View>
   );
 }
@@ -57,19 +40,31 @@ export default function SplashScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: 'rgba(77, 4, 61, 1)',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    paddingHorizontal: 20,
   },
+
+  logo: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    marginBottom: 14,
+  },
+
   title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    marginBottom: 10,
+    fontSize: 38,
+    fontWeight: '800',
+    color: '#f7f8f8ff',
   },
+
   subtitle: {
     fontSize: 16,
-    color: 'gray',
+    color: '#f0f0f0ff',
+    marginBottom: 25,
   },
+
   loader: {
     marginTop: 20,
   },

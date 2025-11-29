@@ -135,6 +135,23 @@ const handleSelectRoute = (route: Route) => {
     return 'Use Caution';
   };
 
+  // Return a light tint background for the color (used for selected card bg)
+  const getTintForColor = (hex: string) => {
+    // Map known route hexs to soft tints (keeps visual consistent)
+    switch (hex.toUpperCase()) {
+      case '#4CAF50':
+        return 'rgba(76,175,80,0.12)'; // green tint
+      case '#FFC107':
+        return 'rgba(255,193,7,0.12)'; // amber tint
+      case '#FF9800':
+        return 'rgba(255,152,0,0.12)'; // orange tint
+      case '#F44336':
+        return 'rgba(244,67,54,0.12)'; // red tint fallback
+      default:
+        return 'rgba(85,7,78,0.06)'; // subtle purple fallback
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -370,13 +387,13 @@ const handleSelectRoute = (route: Route) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255, 238, 251, 1)',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255, 238, 251, 1)',
   },
   loadingText: {
     marginTop: 16,
@@ -391,22 +408,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 50,
     paddingBottom: 10,
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255, 238, 251, 1)',
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: '#e9ccec',
   },
   backButton: {
     padding: 8,
   },
   backButtonText: {
     fontSize: 16,
-    color: '#007bff',
+    color: '#8b1757ff',
     fontWeight: '600',
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#55074eff',
   },
   placeholder: {
     width: 60,
@@ -423,7 +440,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   routeSelectionSection: {
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#f3e9f9',
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#e9ecef',
@@ -433,11 +450,11 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 8,
-    color: '#333',
+    color: '#55074eff',
   },
   routeSummary: {
     fontSize: 14,
-    color: '#666',
+    color: '#8b1757ff',
     marginBottom: 16,
   },
   routesScroll: {
@@ -447,7 +464,7 @@ const styles = StyleSheet.create({
     paddingRight: 16,
   },
   routeCard: {
-    backgroundColor: 'white',
+    backgroundColor: '#fff',
     padding: 16,
     borderRadius: 12,
     marginRight: 12,
@@ -455,15 +472,13 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowRadius: 2,
     elevation: 2,
   },
   selectedRouteCard: {
-    backgroundColor: '#e3f2fd',
-    borderWidth: 2,
-    borderColor: '#007bff',
-    shadowColor: '#007bff',
+    backgroundColor: 'rgba(139, 23, 87, 0.08)',
+    shadowColor: '#8b1757ff',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
@@ -478,7 +493,7 @@ const styles = StyleSheet.create({
   routeDescription: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#55074eff',
     flex: 1,
   },
   safetyBadge: {
@@ -501,18 +516,18 @@ const styles = StyleSheet.create({
   },
   detailText: {
     fontSize: 12,
-    color: '#666',
+    color: '#55074eff',
   },
   safetyLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#333',
+    color: '#55074eff',
   },
   detailsScroll: {
     flex: 1,
   },
   selectedRouteDetails: {
-    backgroundColor: 'white',
+    backgroundColor: 'rgba(255, 238, 251, 1)',
     padding: 16,
     paddingBottom: 30,
   },
@@ -520,7 +535,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 16,
-    color: '#333',
+    color: '#55074eff',
   },
   safetyScoreSection: {
     backgroundColor: '#f8f9fa',
@@ -649,7 +664,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   selectRouteButton: {
-    backgroundColor: '#007bff',
+    backgroundColor: '#8b1757ff',
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',
