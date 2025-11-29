@@ -167,13 +167,13 @@ export default function MenuScreen() {
 
         {/* Logout Button */}
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Ionicons name="log-out-outline" size={20} color="#FF3B30" />
+          <Ionicons name="log-out-outline" size={20} color="white" />
           <Text style={styles.logoutButtonText}>Logout</Text>
         </TouchableOpacity>
 
         {/* Footer */}
         <View style={styles.footer}>
-          <Text style={styles.footerText}>© 2024 Your App Name</Text>
+          <Text style={styles.footerText}>© 2025 Saarthi</Text>
         </View>
       </ScrollView>
       <SOSFab />
@@ -188,6 +188,7 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+    backgroundColor:'rgba(255, 238, 251, 1)',
   },
   header: {
     backgroundColor: '#fff',
@@ -198,12 +199,12 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#680d3fff',
     marginBottom: 4,
   },
   headerSubtitle: {
     fontSize: 16,
-    color: '#666',
+    color: '#680d3fff',
   },
   section: {
     marginTop: 16,
@@ -281,7 +282,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#8b1757ff',
     marginHorizontal: 20,
     marginTop: 24,
     marginBottom: 16,
@@ -293,7 +294,7 @@ const styles = StyleSheet.create({
   logoutButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FF3B30',
+    color: 'white',
     marginLeft: 8,
   },
   footer: {
