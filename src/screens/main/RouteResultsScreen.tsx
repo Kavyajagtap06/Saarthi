@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import MapView, { Polyline, Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { TomTomService, Location } from '../../services/tomtomService';
+import { TomTomService, Location, RouteSafetyScore } from '../../services/tomtomService';
 
 const { width, height } = Dimensions.get('window');
 
@@ -20,12 +20,9 @@ interface Route {
   coordinates: Location[];
   distance: string;
   duration: string;
-  safetyScore: number;
+  safety: RouteSafetyScore; // Changed from safetyScore to safety object
   description: string;
   color: string;
-  advantages: string[];
-  disadvantages: string[];
-  warnings: string[];
 }
 
 export default function RouteResultsScreen() {
@@ -38,6 +35,24 @@ export default function RouteResultsScreen() {
   const [routes, setRoutes] = useState<Route[]>([]);
   const [sourceLocation, setSourceLocation] = useState<Location | null>(null);
   const [destinationLocation, setDestinationLocation] = useState<Location | null>(null);
+
+  // Add this navigation handler function
+const handleSelectRoute = (route: Route) => {
+  console.log('🚀 Starting navigation for route:', route.description);
+  
+  // Navigate to navigation screen with route data
+  router.push({
+    pathname: '/navigation',
+    params: {
+      route: JSON.stringify(route),
+      startLocation: JSON.stringify(sourceLocation),
+      endLocation: JSON.stringify(destinationLocation),
+      routeName: route.description,
+      totalDistance: route.distance,
+      totalDuration: route.duration,
+    }
+  });
+};
 
   const source = params.source as string;
   const destination = params.destination as string;
@@ -70,24 +85,21 @@ export default function RouteResultsScreen() {
       setSourceLocation(startLocation);
       setDestinationLocation(endLocation);
 
-      // Get real routes from TomTom
-      const tomtomRoutes = await TomTomService.calculateRoutes(startLocation, endLocation);
+      // Get real routes with safety data from TomTom
+      const routesWithSafety = await TomTomService.calculateRoutes(startLocation, endLocation);
       
-      // Convert to our route format with safety scoring
-      const formattedRoutes: Route[] = tomtomRoutes.slice(0, 3).map((route, index) => {
-        const safetyScore = TomTomService.calculateRouteSafety(route, index);
+      // Convert to our route format
+      const formattedRoutes: Route[] = routesWithSafety.map(({route, safety}, index) => {
+        const routeTypeNames = ['Safest', 'Balanced', 'Fastest'];
         
         return {
           id: `route-${index}`,
           coordinates: route.coordinates,
           distance: `${(route.distance / 1000).toFixed(1)} km`,
           duration: `${Math.round(route.duration / 60)} mins`,
-          safetyScore,
-          description: TomTomService.getRouteDescription(safetyScore, index),
+          safety, // Real safety data from TomTom APIs
+          description: `${routeTypeNames[index]} Route`,
           color: index === 0 ? '#4CAF50' : index === 1 ? '#FFC107' : '#FF9800',
-          advantages: TomTomService.getRouteAdvantages(safetyScore, index),
-          disadvantages: TomTomService.getRouteDisadvantages(safetyScore, index),
-          warnings: safetyScore < 60 ? ['Use extra caution in poorly lit areas'] : []
         };
       });
 
@@ -127,7 +139,7 @@ export default function RouteResultsScreen() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#007bff" />
-        <Text style={styles.loadingText}>Calculating safest routes...</Text>
+        <Text style={styles.loadingText}>Calculating safest routes with TomTom data...</Text>
       </View>
     );
   }
@@ -215,8 +227,8 @@ export default function RouteResultsScreen() {
               >
                 <View style={styles.routeHeader}>
                   <Text style={styles.routeDescription}>{route.description}</Text>
-                  <View style={[styles.safetyBadge, { backgroundColor: getSafetyColor(route.safetyScore) }]}>
-                    <Text style={styles.safetyScore}>{route.safetyScore}</Text>
+                  <View style={[styles.safetyBadge, { backgroundColor: getSafetyColor(route.safety.overallScore) }]}>
+                    <Text style={styles.safetyScore}>{route.safety.overallScore}</Text>
                   </View>
                 </View>
                 
@@ -226,7 +238,7 @@ export default function RouteResultsScreen() {
                 </View>
                 
                 <Text style={styles.safetyLabel}>
-                  {getSafetyLabel(route.safetyScore)}
+                  {TomTomService.getRouteDescription(route.safety.overallScore)}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -243,53 +255,108 @@ export default function RouteResultsScreen() {
             <View style={styles.selectedRouteDetails}>
               {routes.filter(route => route.id === selectedRoute).map(route => (
                 <View key={route.id}>
-                  <Text style={styles.detailsTitle}>Route Details</Text>
+                  <Text style={styles.detailsTitle}>Safety Analysis</Text>
                   
-                  <View style={styles.detailsGrid}>
-                    <View style={styles.detailItem}>
-                      <Text style={styles.detailLabel}>Safety Score</Text>
-                      <Text style={[styles.detailValue, { color: getSafetyColor(route.safetyScore) }]}>
-                        {route.safetyScore}/100
-                      </Text>
+                  {/* Overall Safety Score */}
+                  <View style={styles.safetyScoreSection}>
+                    <Text style={styles.safetyScoreLabel}>Overall Safety Score</Text>
+                    <Text style={[styles.safetyScoreValue, { color: getSafetyColor(route.safety.overallScore) }]}>
+                      {route.safety.overallScore}/100
+                    </Text>
+                    <Text style={styles.safetyScoreDescription}>
+                      {TomTomService.getRouteDescription(route.safety.overallScore)}
+                    </Text>
+                  </View>
+
+                  {/* Safety Factors Breakdown */}
+                  <View style={styles.factorsSection}>
+                    <Text style={styles.sectionTitle}>📊 Safety Factors (TomTom Data)</Text>
+                    
+                    <View style={styles.factorItem}>
+                      <Text style={styles.factorLabel}>💡 Street Lighting</Text>
+                      <Text style={styles.factorValue}>{route.safety.factors.lighting}/100</Text>
                     </View>
                     
-                    <View style={styles.detailItem}>
-                      <Text style={styles.detailLabel}>Distance</Text>
-                      <Text style={styles.detailValue}>{route.distance}</Text>
+                    <View style={styles.factorItem}>
+                      <Text style={styles.factorLabel}>👥 Population Density</Text>
+                      <Text style={styles.factorValue}>{route.safety.factors.populationDensity}/100</Text>
                     </View>
                     
-                    <View style={styles.detailItem}>
-                      <Text style={styles.detailLabel}>Duration</Text>
-                      <Text style={styles.detailValue}>{route.duration}</Text>
+                    <View style={styles.factorItem}>
+                      <Text style={styles.factorLabel}>🚓 Police Stations</Text>
+                      <Text style={styles.factorValue}>{route.safety.factors.policeStations} in area</Text>
+                    </View>
+                    
+                    <View style={styles.factorItem}>
+                      <Text style={styles.factorLabel}>🏥 Hospitals</Text>
+                      <Text style={styles.factorValue}>{route.safety.factors.hospitals} nearby</Text>
+                    </View>
+                    
+                    <View style={styles.factorItem}>
+                      <Text style={styles.factorLabel}>🛣️ Road Safety</Text>
+                      <Text style={styles.factorValue}>{route.safety.factors.roadType}/100</Text>
+                    </View>
+                    
+                    <View style={styles.factorItem}>
+                      <Text style={styles.factorLabel}>🚦 Traffic Incidents</Text>
+                      <Text style={styles.factorValue}>{route.safety.factors.trafficIncidents} recent</Text>
+                    </View>
+                    
+                    <View style={styles.factorItem}>
+                      <Text style={styles.factorLabel}>📍 Area Safety</Text>
+                      <Text style={styles.factorValue}>{route.safety.factors.areaSafety}/100</Text>
                     </View>
                   </View>
 
+                  {/* Data Sources */}
+                  <View style={styles.dataSourceSection}>
+                    <Text style={styles.dataSourceTitle}>🔍 Data Sources (TomTom APIs)</Text>
+                    {route.safety.dataSources.map((source, index) => (
+                      <Text key={index} style={styles.dataSourceItem}>• {source}</Text>
+                    ))}
+                  </View>
+
+                  {/* Advantages & Disadvantages */}
                   <View style={styles.advantagesSection}>
-                    <Text style={styles.sectionTitle}>✅ Advantages</Text>
-                    {route.advantages.map((advantage, index) => (
+                    <Text style={styles.sectionTitle}>✅ Route Advantages</Text>
+                    {TomTomService.getRouteAdvantages(route.safety.overallScore, route.safety.factors).map((advantage, index) => (
                       <Text key={index} style={styles.listItem}>• {advantage}</Text>
                     ))}
                   </View>
 
                   <View style={styles.disadvantagesSection}>
-                    <Text style={styles.sectionTitle}>⚠️ Considerations</Text>
-                    {route.disadvantages.map((disadvantage, index) => (
+                    <Text style={styles.sectionTitle}>⚠️ Safety Considerations</Text>
+                    {TomTomService.getRouteDisadvantages(route.safety.overallScore, route.safety.factors).map((disadvantage, index) => (
                       <Text key={index} style={styles.listItem}>• {disadvantage}</Text>
                     ))}
                   </View>
 
-                  {route.warnings.length > 0 && (
+                  {/* Warnings */}
+                  {route.safety.warnings.length > 0 && (
                     <View style={styles.warningsSection}>
-                      <Text style={styles.warningTitle}>🚨 Important</Text>
-                      {route.warnings.map((warning, index) => (
+                      <Text style={styles.warningTitle}>🚨 Safety Alerts</Text>
+                      {route.safety.warnings.map((warning, index) => (
                         <Text key={index} style={styles.warningText}>• {warning}</Text>
                       ))}
                     </View>
                   )}
 
-                  <TouchableOpacity style={styles.selectRouteButton}>
-                    <Text style={styles.selectRouteText}>Select This Route</Text>
-                  </TouchableOpacity>
+                  {/* Recommendations */}
+                  {route.safety.recommendations.length > 0 && (
+                    <View style={styles.recommendationsSection}>
+                      <Text style={styles.recommendationTitle}>💡 Safety Recommendations</Text>
+                      {route.safety.recommendations.map((recommendation, index) => (
+                        <Text key={index} style={styles.recommendationText}>• {recommendation}</Text>
+                      ))}
+                    </View>
+                  )}
+
+                  <TouchableOpacity 
+  style={styles.selectRouteButton}
+  onPress={() => handleSelectRoute(route)}
+>
+  <Text style={styles.selectRouteText}>Start Navigation</Text>
+</TouchableOpacity>
                 </View>
               ))}
             </View>
@@ -315,6 +382,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     color: '#666',
+    textAlign: 'center',
   },
   header: {
     flexDirection: 'row',
@@ -344,14 +412,14 @@ const styles = StyleSheet.create({
     width: 60,
   },
   mapContainer: {
-    height: '45%', // Fixed height for map
+    height: '45%',
   },
   map: {
     width: '100%',
     height: '100%',
   },
   bottomPanel: {
-    flex: 1, // Takes remaining space
+    flex: 1,
     backgroundColor: '#fff',
   },
   routeSelectionSection: {
@@ -359,7 +427,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#e9ecef',
-    minHeight: 160, // Fixed height for route cards
+    minHeight: 160,
   },
   panelTitle: {
     fontSize: 20,
@@ -373,10 +441,10 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   routesScroll: {
-    flexGrow: 0, // Prevent vertical growth
+    flexGrow: 0,
   },
   routesScrollContent: {
-    paddingRight: 16, // Add some right padding for better scrolling
+    paddingRight: 16,
   },
   routeCard: {
     backgroundColor: 'white',
@@ -441,12 +509,12 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   detailsScroll: {
-    flex: 1, // Takes remaining space in bottom panel
+    flex: 1,
   },
   selectedRouteDetails: {
     backgroundColor: 'white',
     padding: 16,
-    paddingBottom: 30, // Extra padding at bottom
+    paddingBottom: 30,
   },
   detailsTitle: {
     fontSize: 18,
@@ -454,58 +522,99 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     color: '#333',
   },
-  detailsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
+  safetyScoreSection: {
     backgroundColor: '#f8f9fa',
-    padding: 12,
-    borderRadius: 8,
-  },
-  detailItem: {
+    padding: 16,
+    borderRadius: 12,
     alignItems: 'center',
-    flex: 1,
+    marginBottom: 16,
   },
-  detailLabel: {
-    fontSize: 12,
+  safetyScoreLabel: {
+    fontSize: 14,
     color: '#666',
+    marginBottom: 8,
+  },
+  safetyScoreValue: {
+    fontSize: 32,
+    fontWeight: 'bold',
     marginBottom: 4,
   },
-  detailValue: {
+  safetyScoreDescription: {
     fontSize: 14,
-    fontWeight: 'bold',
-    color: '#333',
+    color: '#666',
+    fontStyle: 'italic',
   },
-  advantagesSection: {
+  factorsSection: {
+    backgroundColor: '#e8f5e8',
+    padding: 16,
+    borderRadius: 12,
     marginBottom: 16,
-    backgroundColor: '#f8f9fa',
-    padding: 12,
-    borderRadius: 8,
-  },
-  disadvantagesSection: {
-    marginBottom: 16,
-    backgroundColor: '#fff3cd',
-    padding: 12,
-    borderRadius: 8,
   },
   sectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 12,
+    color: '#333',
+  },
+  factorItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+    paddingVertical: 4,
+  },
+  factorLabel: {
+    fontSize: 14,
+    color: '#333',
+    flex: 1,
+  },
+  factorValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  dataSourceSection: {
+    backgroundColor: '#e3f2fd',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  dataSourceTitle: {
     fontSize: 14,
     fontWeight: 'bold',
     marginBottom: 8,
-    color: '#333',
+    color: '#1565c0',
   },
-  listItem: {
+  dataSourceItem: {
     fontSize: 12,
-    color: '#666',
+    color: '#1565c0',
     marginBottom: 4,
-    marginLeft: 8,
     lineHeight: 16,
   },
-  warningsSection: {
+  advantagesSection: {
+    backgroundColor: '#f8f9fa',
+    padding: 16,
+    borderRadius: 12,
     marginBottom: 16,
+  },
+  disadvantagesSection: {
+    backgroundColor: '#fff3cd',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  listItem: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 6,
+    marginLeft: 8,
+    lineHeight: 18,
+  },
+  warningsSection: {
     backgroundColor: '#f8d7da',
-    padding: 12,
-    borderRadius: 8,
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
   },
   warningTitle: {
     fontSize: 14,
@@ -514,11 +623,30 @@ const styles = StyleSheet.create({
     color: '#721c24',
   },
   warningText: {
-    fontSize: 12,
+    fontSize: 14,
     color: '#721c24',
-    marginBottom: 4,
+    marginBottom: 6,
     marginLeft: 8,
-    lineHeight: 16,
+    lineHeight: 18,
+  },
+  recommendationsSection: {
+    backgroundColor: '#d1ecf1',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  recommendationTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    color: '#0c5460',
+  },
+  recommendationText: {
+    fontSize: 14,
+    color: '#0c5460',
+    marginBottom: 6,
+    marginLeft: 8,
+    lineHeight: 18,
   },
   selectRouteButton: {
     backgroundColor: '#007bff',

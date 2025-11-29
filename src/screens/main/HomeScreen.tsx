@@ -17,6 +17,7 @@ import { useRouter } from 'expo-router';
 import { signOut } from 'firebase/auth';
 import { auth } from '../../config/firebase';
 import { TomTomService, Location } from '../../services/tomtomService';
+import SOSFab from '../../components/SOSFab';
 
 const { width, height } = Dimensions.get('window');
 
@@ -223,7 +224,8 @@ export default function HomeScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>SafeRoute</Text>
+        <Text style={styles.headerTitle}>Saarthi</Text>
+         <SOSFab />
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutText}>Logout</Text>
         </TouchableOpacity>

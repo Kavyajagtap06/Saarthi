@@ -3,6 +3,7 @@ import { Stack } from 'expo-router';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../src/config/firebase';
 import SplashScreen from '../src/screens/auth/SpalshScreen';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 export default function RootLayout() {
   const [isLoading, setIsLoading] = useState(true);
@@ -21,13 +22,18 @@ export default function RootLayout() {
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      {user ? (
-        <Stack.Screen name="(tabs)" />
-      ) : (
-        <Stack.Screen name="(auth)" />  
-      )}
-      <Stack.Screen name="+not-found" />
-    </Stack>
+    <SafeAreaProvider>
+      <Stack screenOptions={{ headerShown: false }}>
+        {user ? (
+          <>
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="sos" />
+          </>
+        ) : (
+          <Stack.Screen name="(auth)" />  
+        )}
+        <Stack.Screen name="+not-found" />
+      </Stack>
+    </SafeAreaProvider>
   );
 }

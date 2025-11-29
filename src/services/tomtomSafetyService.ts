@@ -1,30 +1,13 @@
-// src/services/tomtomService.ts
-
-const TOMTOM_API_KEY = 'AllXoQmOS8UfzOdNykrCCrWSZ8l28I4V';
-
-const BASE_URL = 'https://api.tomtom.com';
-
-export interface Location {
-  latitude: number;
-  longitude: number;
-  address: string;
-}
-
-export interface Route {
-  coordinates: Location[];
-  distance: number;
-  duration: number;
-  summary: string;
-}
+// src/services/tomtomSafetyService.ts
 
 export interface SafetyFactors {
-  lighting: number;
-  populationDensity: number;
-  policeStations: number;
-  hospitals: number;
-  roadType: number;
-  trafficIncidents: number;
-  areaSafety: number;
+  lighting: number; // 0-100 (estimated based on area type)
+  populationDensity: number; // 0-100 (based on urban/rural classification)
+  policeStations: number; // count from TomTom POI search
+  hospitals: number; // count from TomTom POI search
+  roadType: number; // 0-100 (from TomTom road data)
+  trafficIncidents: number; // recent incidents from TomTom Traffic API
+  areaSafety: number; // 0-100 (composite score)
 }
 
 export interface RouteSafetyScore {
@@ -35,211 +18,22 @@ export interface RouteSafetyScore {
   dataSources: string[];
 }
 
-export class TomTomService {
-  // Enhanced geocoding with proper TomTom API format
-  static async geocodeAddress(address: string): Promise<Location> {
+export class TomTomSafetyService {
+  private static TOMTOM_API_KEY = 'AllXoQmOS8UfzOdNykrCCrWSZ8l28I4V'; // Same as main service
+
+  // Get safety factors using TomTom Search API for Points of Interest
+  static async getSafetyFactors(latitude: number, longitude: number): Promise<SafetyFactors> {
     try {
-      console.log('🔍 Geocoding address:', address);
+      console.log('🔍 Getting safety factors from TomTom APIs...');
       
-      if (!address.trim()) {
-        throw new Error('Address cannot be empty');
-      }
-
-      const cleanAddress = address.trim();
-      const encodedAddress = encodeURIComponent(cleanAddress);
-      
-      const url = `${BASE_URL}/search/2/geocode/${encodedAddress}.json?key=${TOMTOM_API_KEY}&limit=1&countrySet=IN`;
-      
-      console.log('🌐 API Request URL:', url.replace(TOMTOM_API_KEY, 'HIDDEN_KEY'));
-
-      const response = await fetch(url);
-      
-      console.log('📡 Response status:', response.status);
-      
-      if (!response.ok) {
-        let errorDetails = '';
-        try {
-          const errorData = await response.json();
-          errorDetails = JSON.stringify(errorData);
-          console.log('❌ Error details:', errorData);
-        } catch (e) {
-          errorDetails = await response.text();
-        }
-        
-        if (response.status === 403) {
-          throw new Error(`TomTom API Key Error (403): Your API key is invalid or not activated. Please check your TomTom dashboard.`);
-        } else if (response.status === 429) {
-          throw new Error('Rate limit exceeded. Please try again in a moment.');
-        } else {
-          throw new Error(`TomTom API Error ${response.status}: ${errorDetails}`);
-        }
-      }
-      
-      const data = await response.json();
-      console.log('✅ Geocoding successful. Results:', data);
-      
-      if (!data.results || data.results.length === 0) {
-        throw new Error(`No results found for "${address}". Please try a more specific address.`);
-      }
-      
-      const result = data.results[0];
-      const location = {
-        latitude: result.position.lat,
-        longitude: result.position.lon,
-        address: result.address.freeformAddress || cleanAddress
-      };
-      
-      console.log('📍 Location found:', location);
-      return location;
-      
-    } catch (error: any) {
-      console.error('🚨 Geocoding failed:', error);
-      throw error;
-    }
-  }
-
-  // Test the API key with a simple request
-  static async testAPIKey(): Promise<{ working: boolean; message: string }> {
-    try {
-      console.log('🧪 Testing TomTom API key...');
-      
-      const testUrl = `${BASE_URL}/search/2/geocode/mumbai.json?key=${TOMTOM_API_KEY}&limit=1`;
-      
-      const response = await fetch(testUrl);
-      console.log('🔑 API Test - Status:', response.status);
-      
-      if (response.status === 200) {
-        return { working: true, message: '✅ API Key is working correctly!' };
-      } else if (response.status === 403) {
-        return { working: false, message: '❌ API Key is invalid or not activated' };
-      } else {
-        return { working: false, message: `⚠️ API returned status: ${response.status}` };
-      }
-    } catch (error: any) {
-      return { working: false, message: `🚨 API test failed: ${error.message}` };
-    }
-  }
-
-  // Enhanced routing with real safety data
-  static async calculateRoutes(
-    start: Location, 
-    end: Location, 
-    travelMode: string = 'car'
-  ): Promise<{route: Route; safety: RouteSafetyScore}[]> {
-    try {
-      console.log('🗺️ Calculating routes with real safety data...');
-      
-      const url = `${BASE_URL}/routing/1/calculateRoute/${start.latitude},${start.longitude}:${end.latitude},${end.longitude}/json?key=${TOMTOM_API_KEY}&travelMode=${travelMode}&routeType=fastest&maxAlternatives=2`;
-      
-      console.log('🌐 Routing URL:', url.replace(TOMTOM_API_KEY, 'HIDDEN_KEY'));
-
-      const response = await fetch(url);
-      
-      console.log('📡 Routing response status:', response.status);
-      
-      if (!response.ok) {
-        throw new Error(`Routing failed: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      console.log('✅ Routing successful:', data);
-      
-      if (!data.routes || data.routes.length === 0) {
-        throw new Error('No routes found between these locations');
-      }
-
-      // Calculate safety scores for each route using TomTom APIs
-      const routesWithSafety = await Promise.all(
-        data.routes.map(async (tomtomRoute: any, index: number) => {
-          const coordinates = tomtomRoute.legs[0].points.map((point: any) => ({
-            latitude: point.latitude,
-            longitude: point.longitude,
-            address: ''
-          }));
-
-          const route: Route = {
-            coordinates,
-            distance: tomtomRoute.summary.lengthInMeters,
-            duration: tomtomRoute.summary.travelTimeInSeconds,
-            summary: tomtomRoute.summary
-          };
-
-          // Get real safety data from TomTom APIs
-          const safety = await this.calculateRouteSafetyWithTomTom(coordinates);
-
-          return { route, safety };
-        })
-      );
-
-      return routesWithSafety;
-    } catch (error) {
-      console.error('🚨 Routing error:', error);
-      throw error;
-    }
-  }
-
-  // Real safety calculation using TomTom APIs
-  private static async calculateRouteSafetyWithTomTom(routeCoordinates: {latitude: number, longitude: number}[]): Promise<RouteSafetyScore> {
-    try {
-      if (routeCoordinates.length === 0) {
-        return this.getDefaultSafetyScore();
-      }
-
-      // Further reduce sampling points and add better coordination
-      const samplePoints = this.sampleRoutePoints(routeCoordinates, 2); // Ensure it's 2 points
-      
-      console.log(`📍 Sampling ${samplePoints.length} points for safety analysis`);
-      
-      // Process points sequentially to avoid rate limits
-      const allFactors: SafetyFactors[] = [];
-      
-      for (let i = 0; i < samplePoints.length; i++) {
-        const point = samplePoints[i];
-        console.log(`📍 Processing point ${i + 1}/${samplePoints.length}`);
-        
-        try {
-          const factors = await this.getSafetyFactorsFromTomTom(point.latitude, point.longitude);
-          allFactors.push(factors);
-          
-          // Add delay between points to avoid rate limits
-          if (i < samplePoints.length - 1) {
-            await this.delay(500); // Increased delay between points
-          }
-        } catch (error) {
-          console.error(`Error processing point ${i + 1}:`, error);
-          // Use default factors for this point if there's an error
-          allFactors.push(this.getDefaultSafetyFactors());
-        }
-      }
-
-      return this.aggregateSafetyFactors(allFactors);
-    } catch (error) {
-      console.error('Error calculating route safety:', error);
-      return this.getDefaultSafetyScore();
-    }
-  }
-
-  // Get safety factors using TomTom APIs
-  private static async getSafetyFactorsFromTomTom(latitude: number, longitude: number): Promise<SafetyFactors> {
-    try {
-      console.log(`🔍 Getting safety factors for: ${latitude}, ${longitude}`);
-      
-      // Get POIs around the location
+      // Get POIs around the location (police, hospitals, etc.)
       const pois = await this.getNearbyPOIs(latitude, longitude);
       
-      // Get area type for estimation
+      // Get traffic incidents in the area
+      const incidents = await this.getTrafficIncidents(latitude, longitude);
+      
+      // Estimate lighting based on area type (commercial/residential)
       const areaType = await this.getAreaType(latitude, longitude);
-      
-      // Get traffic incidents with enhanced error handling
-      let trafficIncidents = 0;
-      try {
-        trafficIncidents = await this.getTrafficIncidents(latitude, longitude);
-      } catch (error) {
-        console.log('⚠️ Traffic incidents API failed, using alternative method');
-        trafficIncidents = await this.getTrafficIncidentsAlternative(latitude, longitude);
-      }
-      
-      console.log(`✅ Safety factors obtained - Police: ${pois.policeStations}, Hospitals: ${pois.hospitals}, Area: ${areaType}, Incidents: ${trafficIncidents}`);
       
       return {
         lighting: this.estimateLighting(areaType),
@@ -247,8 +41,8 @@ export class TomTomService {
         policeStations: pois.policeStations,
         hospitals: pois.hospitals,
         roadType: this.estimateRoadSafety(latitude, longitude),
-        trafficIncidents: trafficIncidents,
-        areaSafety: this.calculateAreaSafety(pois, areaType)
+        trafficIncidents: incidents,
+        areaSafety: this.calculateAreaSafety(pois, incidents, areaType)
       };
     } catch (error) {
       console.error('Error getting safety factors:', error);
@@ -272,7 +66,7 @@ export class TomTomService {
       try {
         // Search for police stations with broader categories
         const policeResponse = await fetch(
-          `https://api.tomtom.com/search/2/poiSearch/police%20station.json?key=${TOMTOM_API_KEY}&lat=${latitude}&lon=${longitude}&radius=${radius}&limit=3` // Further reduced limit
+          `https://api.tomtom.com/search/2/poiSearch/police%20station.json?key=${this.TOMTOM_API_KEY}&lat=${latitude}&lon=${longitude}&radius=${radius}&limit=3` // Further reduced limit
         );
         
         if (policeResponse.ok) {
@@ -292,7 +86,7 @@ export class TomTomService {
       try {
         // Search for hospitals with broader categories
         const hospitalResponse = await fetch(
-          `https://api.tomtom.com/search/2/poiSearch/hospital%20medical%20center.json?key=${TOMTOM_API_KEY}&lat=${latitude}&lon=${longitude}&radius=${radius}&limit=3` // Further reduced limit
+          `https://api.tomtom.com/search/2/poiSearch/hospital%20medical%20center.json?key=${this.TOMTOM_API_KEY}&lat=${latitude}&lon=${longitude}&radius=${radius}&limit=3` // Further reduced limit
         );
         
         if (hospitalResponse.ok) {
@@ -320,23 +114,21 @@ export class TomTomService {
   // Get traffic incidents using TomTom Traffic API - FIXED VERSION
   private static async getTrafficIncidents(latitude: number, longitude: number): Promise<number> {
     try {
+      // Add delay to avoid rate limiting
       await this.delay(50);
       
-      // CORRECTED: Use the proper TomTom Traffic API v4/flowSegmentData endpoint
-      const url = `https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/10/json?key=${TOMTOM_API_KEY}&point=${latitude},${longitude}`;
+      // Use the correct TomTom Traffic API endpoint format
+      // Corrected API endpoint - using the proper Traffic API format
+      const url = `https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/10/json?key=${this.TOMTOM_API_KEY}&point=${latitude},${longitude}&zoom=12`;
       
-      console.log('🚦 Traffic API URL:', url.replace(TOMTOM_API_KEY, 'HIDDEN_KEY'));
+      console.log('🚦 Traffic API URL:', url.replace(this.TOMTOM_API_KEY, 'HIDDEN_KEY'));
 
       const response = await fetch(url);
       
       if (!response.ok) {
         if (response.status === 404) {
-          console.log('⚠️ Traffic API endpoint not found (404), using alternative method');
+          console.log('⚠️ Traffic API endpoint not found, using alternative method');
           return this.getTrafficIncidentsAlternative(latitude, longitude);
-        }
-        if (response.status === 403) {
-          console.log('⚠️ API Key invalid for Traffic API, using default');
-          return 0;
         }
         if (response.status === 429) {
           console.log('⚠️ Rate limit hit for traffic incidents, using default');
@@ -348,16 +140,19 @@ export class TomTomService {
       
       const data = await response.json();
       
+      // Parse traffic flow data to estimate incidents
+      // Lower flow rates might indicate incidents
       const flowData = data.flowSegmentData;
       if (!flowData) {
         return 0;
       }
       
+      // Estimate incidents based on traffic flow
       let incidentScore = 0;
       if (flowData.currentSpeed < (flowData.freeFlowSpeed * 0.5)) {
-        incidentScore = 2;
+        incidentScore = 2; // Heavy congestion - likely incidents
       } else if (flowData.currentSpeed < (flowData.freeFlowSpeed * 0.7)) {
-        incidentScore = 1;
+        incidentScore = 1; // Moderate congestion
       }
       
       console.log('🚦 Traffic flow analysis - incidents estimated:', incidentScore);
@@ -406,7 +201,7 @@ export class TomTomService {
       console.log('📍 Getting area type for coordinates:', latitude, longitude);
       
       const response = await fetch(
-        `https://api.tomtom.com/search/2/reverseGeocode/${latitude},${longitude}.json?key=${TOMTOM_API_KEY}`
+        `https://api.tomtom.com/search/2/reverseGeocode/${latitude},${longitude}.json?key=${this.TOMTOM_API_KEY}`
       );
       
       if (!response.ok) {
@@ -571,7 +366,7 @@ export class TomTomService {
   }
 
   // Enhanced area safety calculation with higher base score
-  private static calculateAreaSafety(pois: any, areaType: string): number {
+  private static calculateAreaSafety(pois: any, incidents: number, areaType: string): number {
     let score = 70; // Increased base score from 50
 
     // Enhanced positive factors with better weighting
@@ -582,10 +377,48 @@ export class TomTomService {
     if (areaType === 'commercial') score += 15;
     if (areaType === 'residential') score += 10;
 
+    // Reduced negative impact from incidents
+    if (incidents > 0) score -= Math.min(20, incidents * 3); // Reduced from 5 to 3 per incident
+
     return Math.max(0, Math.min(100, score));
   }
 
-  // Utility methods
+  // Calculate safety for an entire route
+  static async calculateRouteSafety(routeCoordinates: {latitude: number, longitude: number}[]): Promise<RouteSafetyScore> {
+    if (routeCoordinates.length === 0) {
+      return this.getDefaultSafetyScore();
+    }
+
+    // Further reduce sampling points and add better coordination
+    const samplePoints = this.sampleRoutePoints(routeCoordinates, 2); // Ensure it's 2 points
+    
+    console.log(`📍 Sampling ${samplePoints.length} points for safety analysis`);
+    
+    // Process points sequentially to avoid rate limits
+    const allFactors: SafetyFactors[] = [];
+    
+    for (let i = 0; i < samplePoints.length; i++) {
+      const point = samplePoints[i];
+      console.log(`📍 Processing point ${i + 1}/${samplePoints.length}`);
+      
+      try {
+        const factors = await this.getSafetyFactors(point.latitude, point.longitude);
+        allFactors.push(factors);
+        
+        // Add delay between points to avoid rate limits
+        if (i < samplePoints.length - 1) {
+          await this.delay(500); // Increased delay between points
+        }
+      } catch (error) {
+        console.error(`Error processing point ${i + 1}:`, error);
+        // Use default factors for this point if there's an error
+        allFactors.push(this.getDefaultSafetyFactors());
+      }
+    }
+
+    return this.aggregateSafetyFactors(allFactors);
+  }
+
   private static sampleRoutePoints(coordinates: {latitude: number, longitude: number}[], count: number) {
     if (coordinates.length <= count) return coordinates;
     
@@ -646,9 +479,9 @@ export class TomTomService {
       warnings,
       recommendations,
       dataSources: [
-        'TomTom Search API - Police Stations & Hospitals',
+        'TomTom Search API - Points of Interest',
         'TomTom Traffic API - Incident Data',
-        'TomTom Reverse Geocoding - Area Classification',
+        'TomTom Geocoding API - Area Classification',
         'TomTom Routing API - Road Infrastructure'
       ]
     };
@@ -694,8 +527,9 @@ export class TomTomService {
     return recommendations.length > 0 ? recommendations : ['Route appears generally safe'];
   }
 
+  // Utility methods
   private static getBoundingBox(lat: number, lng: number, radiusKm: number): string {
-    const delta = radiusKm / 111;
+    const delta = radiusKm / 111; // Approximate degrees per km
     return `${(lng - delta).toFixed(6)},${(lat - delta).toFixed(6)},${(lng + delta).toFixed(6)},${(lat + delta).toFixed(6)}`;
   }
 
@@ -733,65 +567,5 @@ export class TomTomService {
       recommendations: ['Route appears generally safe'],
       dataSources: ['TomTom APIs - Enhanced Safety Data']
     };
-  }
-
-  // Updated route description with higher thresholds
-  static getRouteDescription(safetyScore: number): string {
-    if (safetyScore >= 90) return 'Very Safe Route';
-    if (safetyScore >= 75) return 'Safe Route';
-    if (safetyScore >= 60) return 'Moderately Safe';
-    return 'Use Caution';
-  }
-
-  // Enhanced route advantages with better conditions
-  static getRouteAdvantages(safetyScore: number, factors: SafetyFactors): string[] {
-    const advantages = [];
-    
-    if (safetyScore >= 85) {
-      advantages.push('Well-lit areas throughout');
-      advantages.push('Good emergency service coverage');
-      advantages.push('High population density areas');
-    } else if (safetyScore >= 70) {
-      advantages.push('Generally well-lit route');
-      advantages.push('Adequate emergency services');
-    }
-    
-    if (factors.policeStations > 0) {
-      advantages.push('Police stations nearby');
-    }
-    if (factors.hospitals > 0) {
-      advantages.push('Hospitals in vicinity');
-    }
-    if (factors.trafficIncidents === 0) {
-      advantages.push('No recent traffic incidents');
-    }
-    if (factors.lighting >= 70) {
-      advantages.push('Good street lighting');
-    }
-
-    return advantages.length > 0 ? advantages : ['Direct route available'];
-  }
-
-  // Updated route disadvantages with higher thresholds
-  static getRouteDisadvantages(safetyScore: number, factors: SafetyFactors): string[] {
-    const disadvantages = [];
-    
-    if (factors.policeStations === 0) {
-      disadvantages.push('Limited police presence');
-    }
-    if (factors.hospitals === 0) {
-      disadvantages.push('No nearby hospitals');
-    }
-    if (factors.trafficIncidents > 1) {
-      disadvantages.push('Some traffic incidents reported');
-    }
-    if (safetyScore < 65) { // Increased threshold from 60
-      disadvantages.push('Lower overall safety rating');
-    }
-    if (factors.lighting < 60) {
-      disadvantages.push('Limited street lighting in some areas');
-    }
-
-    return disadvantages.length > 0 ? disadvantages : ['Standard route precautions apply'];
   }
 }
