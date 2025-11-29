@@ -9,58 +9,27 @@ import {
   Dimensions,
   ActivityIndicator,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  Linking
 } from 'react-native';
-import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useRouter } from 'expo-router';
 import { signOut } from 'firebase/auth';
 import { auth } from '../../config/firebase';
+import { TomTomService, Location } from '../../services/tomtomService';
 
 const { width, height } = Dimensions.get('window');
-
-// TomTom API Base URL
-const TOMTOM_BASE_URL = 'https://api.tomtom.com';
-const TOMTOM_API_KEY = 'ylaazc0vefqp7v04y8xgjjlmkzpx8a0n7'; // Replace with your actual API key
-
-// Demo safety data
-const SAFETY_ZONES = [
-  {
-    id: 1,
-    latitude: 28.6129,
-    longitude: 77.2295,
-    safetyScore: 85,
-    type: 'safe',
-    description: 'Well-lit area with police patrol'
-  },
-  {
-    id: 2,
-    latitude: 28.6139,
-    longitude: 77.2095,
-    safetyScore: 45,
-    type: 'moderate',
-    description: 'Moderately crowded area'
-  },
-  {
-    id: 3,
-    latitude: 28.6119,
-    longitude: 77.2495,
-    safetyScore: 25,
-    type: 'unsafe',
-    description: 'Poor lighting, limited visibility'
-  }
-];
 
 export default function HomeScreen() {
   const router = useRouter();
   const mapRef = useRef<MapView>(null);
   
   const [loading, setLoading] = useState(false);
-  const [routeLoading, setRouteLoading] = useState(false);
-  const [route, setRoute] = useState<any>(null);
-  const [safetyZones, setSafetyZones] = useState(SAFETY_ZONES);
-  
   const [source, setSource] = useState('');
   const [destination, setDestination] = useState('');
+  const [sourceLocation, setSourceLocation] = useState<Location | null>(null);
+  const [destinationLocation, setDestinationLocation] = useState<Location | null>(null);
+  const [apiStatus, setApiStatus] = useState<'checking' | 'working' | 'failed'>('checking');
   
   const [region, setRegion] = useState({
     latitude: 28.6129,
@@ -68,6 +37,46 @@ export default function HomeScreen() {
     latitudeDelta: 0.0922,
     longitudeDelta: 0.0421,
   });
+
+  // Test API key on component mount
+  useEffect(() => {
+    checkTomTomAPI();
+  }, []);
+
+  const checkTomTomAPI = async () => {
+    try {
+      setApiStatus('checking');
+      const testResult = await TomTomService.testAPIKey();
+      
+      if (testResult.working) {
+        setApiStatus('working');
+        console.log('✅ TomTom API is working');
+      } else {
+        setApiStatus('failed');
+        console.log('❌ TomTom API failed:', testResult.message);
+        
+        // Show alert about API key issue
+        Alert.alert(
+          'TomTom API Configuration Required',
+          testResult.message + '\n\nYou need a valid TomTom API key to use this app.',
+          [
+            {
+              text: 'Get API Key',
+              onPress: () => Linking.openURL('https://developer.tomtom.com/user/me/apps')
+            },
+            { 
+              text: 'Try Anyway', 
+              style: 'cancel',
+              onPress: () => setApiStatus('failed')
+            }
+          ]
+        );
+      }
+    } catch (error) {
+      setApiStatus('failed');
+      console.log('❌ API check failed:', error);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -78,124 +87,135 @@ export default function HomeScreen() {
     }
   };
 
-  // Geocode address using TomTom Search API
-  const geocodeAddress = async (address: string) => {
-    try {
-      const response = await fetch(
-        `${TOMTOM_BASE_URL}/search/2/geocode/${encodeURIComponent(address)}.json?key=${TOMTOM_API_KEY}`
-      );
-      const data = await response.json();
-      
-      if (data.results && data.results.length > 0) {
-        const { lat, lon } = data.results[0].position;
-        return { latitude: lat, longitude: lon };
-      }
-      return null;
-    } catch (error) {
-      console.error('Geocoding error:', error);
-      return null;
-    }
-  };
-
-  // Calculate route using TomTom Routing API
-  const calculateRoute = async () => {
+  const geocodeLocations = async () => {
     if (!source.trim() || !destination.trim()) {
       Alert.alert('Error', 'Please enter both source and destination');
       return;
     }
 
-    setRouteLoading(true);
+    // If API is known to be failed, show guidance
+    if (apiStatus === 'failed') {
+      Alert.alert(
+        'TomTom API Required',
+        'You need a valid TomTom API key to search locations.\n\nPlease set up your API key first.',
+        [
+          {
+            text: 'Get API Key',
+            onPress: () => Linking.openURL('https://developer.tomtom.com/user/me/apps')
+          },
+          { text: 'OK', style: 'cancel' }
+        ]
+      );
+      return;
+    }
+
+    setLoading(true);
 
     try {
-      // For demo, we'll use mock data since we don't have real API key
-      // In production, you would use:
-      // const startCoords = await geocodeAddress(source);
-      // const endCoords = await geocodeAddress(destination);
-
-      // Demo route data
-      const demoRoute = {
-        coordinates: [
-          { latitude: 28.6129, longitude: 77.2295 },
-          { latitude: 28.6135, longitude: 77.2255 },
-          { latitude: 28.6140, longitude: 77.2215 },
-          { latitude: 28.6145, longitude: 77.2175 },
-          { latitude: 28.6149, longitude: 77.2095 },
-        ],
-        distance: '2.5 km',
-        duration: '15 mins',
-        safetyScore: 72,
-        warnings: ['Moderate safety zone encountered', 'Well-lit areas available'],
-        alternativeRoutes: [
-          {
-            coordinates: [
-              { latitude: 28.6129, longitude: 77.2295 },
-              { latitude: 28.6130, longitude: 77.2275 },
-              { latitude: 28.6132, longitude: 77.2235 },
-              { latitude: 28.6140, longitude: 77.2155 },
-              { latitude: 28.6149, longitude: 77.2095 },
-            ],
-            distance: '2.8 km',
-            duration: '18 mins',
-            safetyScore: 85,
-            description: 'Safer route through well-lit areas'
-          }
-        ]
-      };
-
-      setRoute(demoRoute);
+      console.log('📍 Searching for locations using TomTom API...');
       
-      // Fit map to show the entire route
-      if (mapRef.current && demoRoute.coordinates.length > 0) {
-        mapRef.current.fitToCoordinates(demoRoute.coordinates, {
-          edgePadding: { top: 100, right: 50, bottom: 150, left: 50 },
+      const [start, end] = await Promise.all([
+        TomTomService.geocodeAddress(source),
+        TomTomService.geocodeAddress(destination)
+      ]);
+
+      setSourceLocation(start);
+      setDestinationLocation(end);
+      setApiStatus('working'); // Mark API as working if we got here
+
+      // Update map to show both locations
+      if (mapRef.current) {
+        const coordinates = [
+          { latitude: start.latitude, longitude: start.longitude },
+          { latitude: end.latitude, longitude: end.longitude }
+        ];
+        
+        mapRef.current.fitToCoordinates(coordinates, {
+          edgePadding: { top: 100, right: 50, bottom: 50, left: 50 },
           animated: true,
         });
       }
+
+      Alert.alert('Success', 'Locations found using TomTom API! Click "AI Safe Route" to find safe routes.');
+
+    } catch (error: any) {
+      console.error('🚨 TomTom API Error:', error);
       
-      Alert.alert(
-        'Safe Route Found', 
-        `Distance: ${demoRoute.distance}\nDuration: ${demoRoute.duration}\nSafety Score: ${demoRoute.safetyScore}/100\n\nAlternative safer route available with score: ${demoRoute.alternativeRoutes[0].safetyScore}/100`
-      );
-    } catch (error) {
-      Alert.alert('Error', 'Failed to calculate route. Please try again.');
+      // Handle specific error cases
+      if (error.message.includes('403') || error.message.includes('API Key')) {
+        setApiStatus('failed');
+        Alert.alert(
+          'TomTom API Key Issue',
+          'Your TomTom API key is invalid or not configured properly.\n\nPlease check your API key in the TomTom developer portal.',
+          [
+            {
+              text: 'Fix API Key',
+              onPress: () => Linking.openURL('https://developer.tomtom.com/user/me/apps')
+            },
+            { text: 'OK', style: 'cancel' }
+          ]
+        );
+      } else if (error.message.includes('No results found')) {
+        Alert.alert(
+          'Location Not Found',
+          error.message + '\n\nPlease try:\n• More specific addresses\n• City names\n• Landmark names'
+        );
+      } else if (error.message.includes('Network request failed')) {
+        Alert.alert('Network Error', 'Please check your internet connection and try again.');
+      } else {
+        Alert.alert('Search Error', error.message || 'Failed to find locations. Please try different addresses.');
+      }
     } finally {
-      setRouteLoading(false);
+      setLoading(false);
     }
   };
 
-  const getSafetyColor = (score: number) => {
-    if (score >= 70) return '#4CAF50'; // Green - Safe
-    if (score >= 40) return '#FFC107'; // Yellow - Moderate
-    return '#F44336'; // Red - Unsafe
+  const calculateRoute = async () => {
+    if (!sourceLocation || !destinationLocation) {
+      Alert.alert('Error', 'Please find locations first');
+      return;
+    }
+
+    // Navigate to results screen with real coordinates
+    router.push({
+      pathname: '/route-results',
+      params: {
+        source: source,
+        destination: destination,
+        sourceLat: sourceLocation.latitude.toString(),
+        sourceLng: sourceLocation.longitude.toString(),
+        destLat: destinationLocation.latitude.toString(),
+        destLng: destinationLocation.longitude.toString(),
+      }
+    });
   };
 
-  const getSafetyLabel = (score: number) => {
-    if (score >= 70) return 'Safe';
-    if (score >= 40) return 'Moderate';
-    return 'Unsafe';
-  };
-
-  const clearRoute = () => {
-    setRoute(null);
+  const clearLocations = () => {
+    setSourceLocation(null);
+    setDestinationLocation(null);
     setSource('');
     setDestination('');
   };
 
-  const useAlternativeRoute = (altRoute: any) => {
-    setRoute({
-      ...route,
-      coordinates: altRoute.coordinates,
-      distance: altRoute.distance,
-      duration: altRoute.duration,
-      safetyScore: altRoute.safetyScore,
-      warnings: ['Using safer alternative route']
-    });
-    
-    if (mapRef.current && altRoute.coordinates.length > 0) {
-      mapRef.current.fitToCoordinates(altRoute.coordinates, {
-        edgePadding: { top: 100, right: 50, bottom: 150, left: 50 },
-        animated: true,
-      });
+  const openTomTomDashboard = () => {
+    Linking.openURL('https://developer.tomtom.com/user/me/apps');
+  };
+
+  const getApiStatusColor = () => {
+    switch (apiStatus) {
+      case 'working': return '#4CAF50';
+      case 'failed': return '#F44336';
+      case 'checking': return '#FFC107';
+      default: return '#6c757d';
+    }
+  };
+
+  const getApiStatusText = () => {
+    switch (apiStatus) {
+      case 'working': return 'TomTom API: Connected ✅';
+      case 'failed': return 'TomTom API: Not Configured ❌';
+      case 'checking': return 'TomTom API: Checking...';
+      default: return 'TomTom API: Unknown';
     }
   };
 
@@ -209,46 +229,100 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* API Status Banner */}
+      <View style={[styles.apiStatusBanner, { backgroundColor: getApiStatusColor() + '20' }]}>
+        <Text style={[styles.apiStatusText, { color: getApiStatusColor() }]}>
+          {getApiStatusText()}
+        </Text>
+        {apiStatus === 'failed' && (
+          <TouchableOpacity onPress={openTomTomDashboard}>
+            <Text style={styles.fixApiText}>Fix Now</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
       {/* Search Section */}
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.searchContainer}
       >
         <View style={styles.searchBox}>
-          <TextInput
-            style={styles.input}
-            placeholder="From: Enter starting location"
-            placeholderTextColor="#666"
-            value={source}
-            onChangeText={setSource}
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="To: Enter destination"
-            placeholderTextColor="#666"
-            value={destination}
-            onChangeText={setDestination}
-          />
+          <View style={styles.inputContainer}>
+            <View style={styles.dot} />
+            <TextInput
+              style={styles.input}
+              placeholder="Enter starting location"
+              placeholderTextColor="#666"
+              value={source}
+              onChangeText={setSource}
+              onSubmitEditing={geocodeLocations}
+            />
+          </View>
           
+          <View style={styles.separator} />
+          
+          <View style={styles.inputContainer}>
+            <View style={[styles.dot, styles.destinationDot]} />
+            <TextInput
+              style={styles.input}
+              placeholder="Enter destination"
+              placeholderTextColor="#666"
+              value={destination}
+              onChangeText={setDestination}
+              onSubmitEditing={geocodeLocations}
+            />
+          </View>
+
           <View style={styles.buttonRow}>
             <TouchableOpacity 
-              style={[styles.searchButton, routeLoading && styles.buttonDisabled]} 
-              onPress={calculateRoute}
-              disabled={routeLoading}
+              style={[
+                styles.findButton, 
+                (loading || apiStatus === 'failed') && styles.buttonDisabled
+              ]} 
+              onPress={geocodeLocations}
+              disabled={loading || apiStatus === 'failed'}
             >
-              {routeLoading ? (
+              {loading ? (
                 <ActivityIndicator color="#fff" size="small" />
               ) : (
-                <Text style={styles.searchButtonText}>Search Safe Route</Text>
+                <Text style={styles.buttonText}>
+                  {apiStatus === 'failed' ? 'API Key Required' : 'Find Locations'}
+                </Text>
               )}
             </TouchableOpacity>
             
-            {route && (
-              <TouchableOpacity style={styles.clearButton} onPress={clearRoute}>
-                <Text style={styles.clearButtonText}>Clear</Text>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity 
+              style={[
+                styles.routeButton, 
+                (!sourceLocation || !destinationLocation) && styles.buttonDisabled
+              ]} 
+              onPress={calculateRoute}
+              disabled={!sourceLocation || !destinationLocation}
+            >
+              <Text style={styles.buttonText}>
+                AI Safe Route
+              </Text>
+            </TouchableOpacity>
           </View>
+
+          {/* Help Text */}
+          {apiStatus === 'failed' && (
+            <View style={styles.helpContainer}>
+              <Text style={styles.helpText}>
+                💡 You need a TomTom API key. Click "Fix Now" above to get one.
+              </Text>
+            </View>
+          )}
+
+          {/* Clear Button */}
+          {(sourceLocation || destinationLocation) && (
+            <TouchableOpacity 
+              style={styles.clearButton}
+              onPress={clearLocations}
+            >
+              <Text style={styles.clearButtonText}>Clear Locations</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </KeyboardAvoidingView>
 
@@ -262,110 +336,44 @@ export default function HomeScreen() {
         showsMyLocationButton={true}
         onRegionChangeComplete={setRegion}
       >
-        {/* Safety Zone Markers */}
-        {safetyZones.map(zone => (
+        {/* Source Marker */}
+        {sourceLocation && (
           <Marker
-            key={zone.id}
             coordinate={{
-              latitude: zone.latitude,
-              longitude: zone.longitude
+              latitude: sourceLocation.latitude,
+              longitude: sourceLocation.longitude
             }}
-          >
-            <View style={[styles.marker, { backgroundColor: getSafetyColor(zone.safetyScore) }]}>
-              <Text style={styles.markerText}>{zone.safetyScore}</Text>
-            </View>
-          </Marker>
-        ))}
-
-        {/* Main Route Polyline */}
-        {route && (
-          <Polyline
-            coordinates={route.coordinates}
-            strokeColor="#007bff"
-            strokeWidth={6}
+            title="Start"
+            description={sourceLocation.address}
+            pinColor="#4CAF50"
           />
         )}
 
-        {/* Alternative Routes */}
-        {route?.alternativeRoutes?.map((altRoute: any, index: number) => (
-          <Polyline
-            key={index}
-            coordinates={altRoute.coordinates}
-            strokeColor={getSafetyColor(altRoute.safetyScore)}
-            strokeWidth={4}
-            strokeColors={[getSafetyColor(altRoute.safetyScore)]}
-            lineDashPattern={[5, 5]}
+        {/* Destination Marker */}
+        {destinationLocation && (
+          <Marker
+            coordinate={{
+              latitude: destinationLocation.latitude,
+              longitude: destinationLocation.longitude
+            }}
+            title="Destination"
+            description={destinationLocation.address}
+            pinColor="#F44336"
           />
-        ))}
+        )}
       </MapView>
 
-      {/* Safety Legend */}
-      <View style={styles.legend}>
-        <Text style={styles.legendTitle}>Safety Heatmap</Text>
-        <View style={styles.legendItems}>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendColor, { backgroundColor: '#4CAF50' }]} />
-            <Text style={styles.legendText}>Safe (70-100)</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendColor, { backgroundColor: '#FFC107' }]} />
-            <Text style={styles.legendText}>Moderate (40-69)</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendColor, { backgroundColor: '#F44336' }]} />
-            <Text style={styles.legendText}>Unsafe (0-39)</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Route Info Panel */}
-      {route && (
-        <View style={styles.routeInfo}>
-          <Text style={styles.routeInfoTitle}>Route Details</Text>
-          <View style={styles.routeDetails}>
-            <View style={styles.routeDetail}>
-              <Text style={styles.routeLabel}>Distance:</Text>
-              <Text style={styles.routeValue}>{route.distance}</Text>
-            </View>
-            <View style={styles.routeDetail}>
-              <Text style={styles.routeLabel}>Duration:</Text>
-              <Text style={styles.routeValue}>{route.duration}</Text>
-            </View>
-            <View style={styles.routeDetail}>
-              <Text style={styles.routeLabel}>Safety Score:</Text>
-              <Text style={[styles.routeValue, { color: getSafetyColor(route.safetyScore) }]}>
-                {route.safetyScore}/100 ({getSafetyLabel(route.safetyScore)})
-              </Text>
-            </View>
-          </View>
-          
-          {route.warnings?.map((warning: string, index: number) => (
-            <Text key={index} style={styles.warningText}>⚠️ {warning}</Text>
-          ))}
-
-          {/* Alternative Routes */}
-          {route.alternativeRoutes && route.alternativeRoutes.length > 0 && (
-            <View style={styles.alternativeRoutes}>
-              <Text style={styles.alternativeTitle}>Alternative Routes:</Text>
-              {route.alternativeRoutes.map((altRoute: any, index: number) => (
-                <TouchableOpacity 
-                  key={index}
-                  style={styles.alternativeRoute}
-                  onPress={() => useAlternativeRoute(altRoute)}
-                >
-                  <View style={styles.alternativeRouteInfo}>
-                    <Text style={styles.alternativeRouteText}>
-                      Route {index + 1}: {altRoute.distance} • {altRoute.duration}
-                    </Text>
-                    <Text style={[styles.safetyScore, { color: getSafetyColor(altRoute.safetyScore) }]}>
-                      Safety: {altRoute.safetyScore}/100
-                    </Text>
-                  </View>
-                  <Text style={styles.useRouteText}>Use Route</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
+      {/* Demo Instructions */}
+      {apiStatus === 'failed' && (
+        <View style={styles.demoPanel}>
+          <Text style={styles.demoTitle}>🚨 Action Required</Text>
+          <Text style={styles.demoText}>
+            To use SafeRoute, you need a TomTom API key:{'\n'}
+            1. Click "Fix Now" above{'\n'}
+            2. Create a TomTom account{'\n'}
+            3. Get your free API key{'\n'}
+            4. Update the API key in tomtomService.ts
+          </Text>
         </View>
       )}
     </View>
@@ -402,9 +410,28 @@ const styles = StyleSheet.create({
     color: '#666',
     fontWeight: '500',
   },
+  apiStatusBanner: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  apiStatusText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  fixApiText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#007bff',
+    textDecorationLine: 'underline',
+  },
   searchContainer: {
     position: 'absolute',
-    top: 100,
+    top: 140,
     left: 20,
     right: 20,
     zIndex: 1000,
@@ -419,21 +446,47 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
     elevation: 5,
   },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#4CAF50',
+    marginRight: 12,
+  },
+  destinationDot: {
+    backgroundColor: '#F44336',
+  },
   input: {
+    flex: 1,
     height: 50,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    marginBottom: 12,
     fontSize: 16,
-    backgroundColor: '#fafafa',
+    color: '#333',
+    borderWidth: 0,
+  },
+  separator: {
+    height: 1,
+    backgroundColor: '#eee',
+    marginLeft: 6,
+    marginVertical: 8,
   },
   buttonRow: {
     flexDirection: 'row',
     gap: 10,
+    marginTop: 12,
   },
-  searchButton: {
+  findButton: {
+    flex: 1,
+    height: 50,
+    backgroundColor: '#28a745',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  routeButton: {
     flex: 1,
     height: 50,
     backgroundColor: '#007bff',
@@ -444,21 +497,31 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     backgroundColor: '#ccc',
   },
-  searchButtonText: {
+  buttonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
   },
-  clearButton: {
-    paddingHorizontal: 16,
-    height: 50,
-    backgroundColor: '#6c757d',
-    justifyContent: 'center',
-    alignItems: 'center',
+  helpContainer: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#f8f9fa',
     borderRadius: 8,
   },
+  helpText: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+  },
+  clearButton: {
+    marginTop: 12,
+    padding: 12,
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
   clearButtonText: {
-    color: '#fff',
+    color: '#6c757d',
     fontSize: 14,
     fontWeight: '500',
   },
@@ -466,145 +529,26 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  legend: {
-    position: 'absolute',
-    bottom: 150,
-    left: 20,
-    right: 20,
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  legendTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 8,
-    color: '#333',
-  },
-  legendItems: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  legendColor: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 6,
-  },
-  legendText: {
-    fontSize: 12,
-    color: '#666',
-  },
-  routeInfo: {
+  demoPanel: {
     position: 'absolute',
     bottom: 20,
     left: 20,
     right: 20,
-    backgroundColor: 'white',
-    borderRadius: 12,
+    backgroundColor: 'rgba(255, 243, 205, 0.95)',
     padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-    maxHeight: 300,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#ffeaa7',
   },
-  routeInfoTitle: {
-    fontSize: 18,
+  demoTitle: {
+    fontSize: 16,
     fontWeight: 'bold',
-    marginBottom: 12,
-    color: '#333',
-  },
-  routeDetails: {
-    marginBottom: 12,
-  },
-  routeDetail: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  routeLabel: {
-    fontSize: 14,
-    color: '#666',
-    fontWeight: '500',
-  },
-  routeValue: {
-    fontSize: 14,
-    color: '#333',
-    fontWeight: '600',
-  },
-  warningText: {
-    fontSize: 12,
-    color: '#FF6B35',
-    fontStyle: 'italic',
-    marginTop: 4,
-  },
-  alternativeRoutes: {
-    marginTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    paddingTop: 12,
-  },
-  alternativeTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    marginBottom: 8,
-    color: '#333',
-  },
-  alternativeRoute: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-    padding: 12,
-    borderRadius: 8,
+    color: '#856404',
     marginBottom: 8,
   },
-  alternativeRouteInfo: {
-    flex: 1,
-  },
-  alternativeRouteText: {
+  demoText: {
     fontSize: 12,
-    color: '#333',
-    fontWeight: '500',
-  },
-  safetyScore: {
-    fontSize: 11,
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  useRouteText: {
-    fontSize: 12,
-    color: '#007bff',
-    fontWeight: 'bold',
-  },
-  marker: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'white',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 4,
-  },
-  markerText: {
-    color: 'white',
-    fontSize: 10,
-    fontWeight: 'bold',
+    color: '#856404',
+    lineHeight: 16,
   },
 });
